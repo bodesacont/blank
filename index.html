@@ -253,6 +253,11 @@
       )
     ];
 
+    let playerSpinVelocity = 0;           // Current spin velocity of player blade
+    const playerSpinAccel = 0.05;         // How quickly spin accelerates
+    const playerSpinDecay = 0.92;         // How quickly spin slows down
+    const playerSpinMax = 1.8;            // Maximum spin speed
+
     let dots = [{
       x: Math.random() * (canvas.width - 30) + 15,
       y: Math.random() * (canvas.height - 30) + 15,
@@ -261,12 +266,8 @@
 
     // WASD for movement, ArrowLeft/ArrowRight for spinning
     const keys = {};
-    window.addEventListener('keydown', e => { keys[e.key.toLowerCase()] = true; });
-    window.addEventListener('keyup',   e => { keys[e.key.toLowerCase()] = false; });
-
-    // Also listen for ArrowLeft/ArrowRight with their special names
-    window.addEventListener('keydown', e => { keys[e.key] = true; });
-    window.addEventListener('keyup',   e => { keys[e.key] = false; });
+    window.addEventListener('keydown', e => { keys[e.key.toLowerCase()] = true; keys[e.key] = true; });
+    window.addEventListener('keyup',   e => { keys[e.key.toLowerCase()] = false; keys[e.key] = false; });
 
     let tripleTimer = blades.length * 2 * 60;
     let tripleDelay = tripleTimer;
@@ -492,13 +493,20 @@
       playerBlade.x = Math.max(0, Math.min(canvas.width, playerBlade.x));
       playerBlade.y = Math.max(0, Math.min(canvas.height, playerBlade.y));
 
-      // Spin logic: only spin player with arrows
-      if (keys['ArrowLeft']) {
-        playerBlade.angle -= playerBlade.spinSpeed;
+      // Exponential spin control for player blade
+      if (keys['ArrowLeft'] && !keys['ArrowRight']) {
+        playerSpinVelocity -= playerSpinAccel;
+        if (playerSpinVelocity < -playerSpinMax) playerSpinVelocity = -playerSpinMax;
+      } else if (keys['ArrowRight'] && !keys['ArrowLeft']) {
+        playerSpinVelocity += playerSpinAccel;
+        if (playerSpinVelocity > playerSpinMax) playerSpinVelocity = playerSpinMax;
+      } else {
+        // Smooth decay to zero
+        playerSpinVelocity *= playerSpinDecay;
+        if (Math.abs(playerSpinVelocity) < 0.001) playerSpinVelocity = 0;
       }
-      if (keys['ArrowRight']) {
-        playerBlade.angle += playerBlade.spinSpeed;
-      }
+      playerBlade.angle += playerSpinVelocity;
+
       // Other blades spin automatically
       for (let i = 1; i < blades.length; ++i) {
         blades[i].angle += blades[i].spinSpeed;
