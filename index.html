@@ -40,39 +40,26 @@
     #setupPanel label {
       display: block;
       margin-top: 14px;
-      margin-bottom: 6px;
+      margin-bottom: 8px;
     }
-    #setupPanel input[type="number"] {
-      width: 60px;
-      font-size: 17px;
-      background: #222;
-      color: #fff;
-      border: 1px solid #444;
-      border-radius: 4px;
-      padding: 4px;
-    }
-    #setupPanel .color-option {
-      display: inline-block;
-      width: 38px;
-      height: 38px;
-      border-radius: 50%;
-      margin: 4px;
-      border: 3px solid #fff;
-      box-sizing: border-box;
+    .color-btn, .duration-btn {
+      font-family: monospace;
+      font-size: 18px;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 22px;
+      margin: 6px 6px 6px 0;
       cursor: pointer;
-      position: relative;
+      box-shadow: 0 2px 8px #000b;
+      transition: outline 0.2s;
+      outline: 3px solid transparent;
     }
-    #setupPanel .color-option.selected:after {
-      content: "✔";
-      color: #fff;
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      font-size: 22px;
-      transform: translate(-50%, -50%);
-      pointer-events: none;
+    .color-btn.selected, .duration-btn.selected {
+      outline: 3px solid #fff;
     }
-    #setupPanel button {
+    .color-btn { width: 48px; height: 48px; }
+    .duration-btn { background: #394; color: #fff; }
+    #setupPanel button[type="submit"] {
       font-family: monospace;
       font-size: 18px;
       background: #394;
@@ -120,10 +107,9 @@
     <form id="gameSetupForm">
       <label>Choose your saber color:</label>
       <div id="colorChoices"></div>
-      <label for="duration">Game duration (seconds):</label>
-      <input type="number" id="duration" required min="5" max="3600" value="60">
-      <br>
-      <button type="submit">Start Game</button>
+      <label>Choose game duration:</label>
+      <div id="durationChoices"></div>
+      <button type="submit" id="startBtn" disabled>Start Game</button>
     </form>
   </div>
   <div id="replayPanel">
@@ -141,7 +127,12 @@
       {name: "Purple", bladeColor: "#a020f0"},
       {name: "Cyan", bladeColor: "#00ffd0"}
     ];
-    // Only lightsabers!
+    const gameDurations = [
+      {label: "1 minute", value: 60},
+      {label: "2 minutes", value: 120},
+      {label: "5 minutes", value: 300}
+    ];
+
     function makeBladeType(color) {
       return {
         name: "lightsaber",
@@ -149,7 +140,6 @@
         tipColor: color,
         glow: 18,
         draw: function(ctx, blade) {
-          // Neon glowing blade with matching tip
           ctx.save();
           ctx.shadowColor = blade.bladeColor;
           ctx.shadowBlur = blade.glow;
@@ -167,7 +157,6 @@
           ctx.fillRect(-15, 7, 15, 6);
           ctx.fillStyle = blade.bladeColor;
           ctx.fillRect(0, 5, blade.length - 15, 10);
-          // Tip
           ctx.beginPath();
           ctx.moveTo(blade.length - 15, 5);
           ctx.lineTo(blade.length, 10);
@@ -178,34 +167,58 @@
         }
       };
     }
-    // All blade types are just sabers of different colors
     const bladeTypes = saberColors.map(c => makeBladeType(c.bladeColor));
 
-    let chosenBladeColor = saberColors[0].bladeColor;
-    let gameDuration = 60; // seconds
+    let chosenBladeColor = null;
+    let gameDuration = null;
 
     // Setup color picker UI
     const colorChoicesDiv = document.getElementById('colorChoices');
     function createColorChoices() {
       colorChoicesDiv.innerHTML = '';
       saberColors.forEach((c, idx) => {
-        const colorDiv = document.createElement('div');
-        colorDiv.classList.add('color-option');
-        colorDiv.style.background = c.bladeColor;
-        if (idx === 0) colorDiv.classList.add('selected');
-        colorDiv.onclick = () => {
-          document.querySelectorAll('.color-option').forEach(e=>e.classList.remove('selected'));
-          colorDiv.classList.add('selected');
+        const colorBtn = document.createElement('button');
+        colorBtn.type = "button";
+        colorBtn.className = "color-btn";
+        colorBtn.title = c.name;
+        colorBtn.style.background = c.bladeColor;
+        colorBtn.onclick = () => {
+          document.querySelectorAll('.color-btn').forEach(e=>e.classList.remove('selected'));
+          colorBtn.classList.add('selected');
           chosenBladeColor = c.bladeColor;
+          updateStartBtn();
         };
-        colorChoicesDiv.appendChild(colorDiv);
+        colorChoicesDiv.appendChild(colorBtn);
       });
     }
     createColorChoices();
 
+    // Setup duration picker UI
+    const durationChoicesDiv = document.getElementById('durationChoices');
+    function createDurationChoices() {
+      durationChoicesDiv.innerHTML = '';
+      gameDurations.forEach((d, idx) => {
+        const durBtn = document.createElement('button');
+        durBtn.type = "button";
+        durBtn.className = "duration-btn";
+        durBtn.textContent = d.label;
+        durBtn.onclick = () => {
+          document.querySelectorAll('.duration-btn').forEach(e=>e.classList.remove('selected'));
+          durBtn.classList.add('selected');
+          gameDuration = d.value;
+          updateStartBtn();
+        };
+        durationChoicesDiv.appendChild(durBtn);
+      });
+    }
+    createDurationChoices();
+
+    function updateStartBtn() {
+      document.getElementById('startBtn').disabled = !(chosenBladeColor && gameDuration);
+    }
+
     document.getElementById('gameSetupForm').onsubmit = function(e) {
       e.preventDefault();
-      gameDuration = Math.max(5, Math.min(3600, +document.getElementById('duration').value));
       document.getElementById('setupPanel').style.display = 'none';
       startGame();
     };
@@ -213,9 +226,11 @@
     document.getElementById('replayBtn').onclick = function() {
       document.getElementById('replayPanel').style.display = 'none';
       document.getElementById('setupPanel').style.display = 'block';
-      // Reset inputs
-      document.getElementById('duration').value = gameDuration;
-      createColorChoices();
+      chosenBladeColor = null;
+      gameDuration = null;
+      document.querySelectorAll('.color-btn').forEach(e=>e.classList.remove('selected'));
+      document.querySelectorAll('.duration-btn').forEach(e=>e.classList.remove('selected'));
+      updateStartBtn();
     };
 
     const canvas = document.getElementById('dvdCanvas');
@@ -228,7 +243,7 @@
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
-    let blades, dots, sparks, totalKills, tripleTimer, tripleDelay, gameEnded, timeLeft, playerBladeType;
+    let blades, dots, sparks, totalKills, tripleTimer, tripleDelay, gameEnded, timeLeft;
 
     function makeBlade(x, y, vx, vy, spinSpeed, length, bladeType, isPlayer=false) {
       return {
@@ -451,7 +466,7 @@
     function endGame() {
       gameEnded = true;
       document.getElementById('finalStats').innerHTML =
-        "Game Over!<br>Total Kills: <b>" + totalKills + "</b><br>Time: " + gameDuration + " seconds";
+        "Game Over!<br>Total Kills: <b>" + totalKills + "</b><br>Time: " + Math.floor(gameDuration/60) + " min";
       document.getElementById('replayPanel').style.display = 'block';
     }
 
