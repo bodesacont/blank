@@ -44,9 +44,8 @@
     let timerFrames = 60 * 60; // 60 seconds * 60fps
     let gameEnded = false;
 
-    // Blade types with proper tips
+    // Blade types
     const bladeTypes = [
-      // ... (your bladeTypes array unchanged) ...
       {
         name: "lightsaber-green",
         bladeColor: "#39FF14",
@@ -245,15 +244,17 @@
       };
     }
 
-    // Always start with player and one enemy blade!
     let blades = [
       makeBlade(canvas.width / 2, canvas.height / 2, 0, 0, 0.08, 70, bladeTypes[0], true),
-      makeBlade(Math.random()*canvas.width, Math.random()*canvas.height,
+      makeBlade(
+        Math.random()*canvas.width, Math.random()*canvas.height,
         Math.random()*4-2, Math.random()*4-2,
         Math.random()*0.1+0.05,
         Math.floor(Math.random()*60)+50,
-        randomBladeType())
+        randomBladeType()
+      )
     ];
+    let playerRotationMultiplier = 1; // <--- for exponential rotation
 
     let dots = [{
       x: Math.random() * (canvas.width - 30) + 15,
@@ -261,8 +262,12 @@
       radius: 10
     }];
 
-    // WASD movement for player
+    // WASD + ARROW movement for player
     const keys = {};
+    window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+    window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+
+    // Also listen for arrow keys (they use uppercase names)
     window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
     window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
 
@@ -455,6 +460,16 @@
       }
       if (gameEnded) return;
 
+      // Exponential rotation for player when arrow keys pressed
+      let arrowPressed =
+        keys['arrowleft'] || keys['arrowright'] ||
+        keys['arrowup'] || keys['arrowdown'];
+      if (arrowPressed) {
+        playerRotationMultiplier = Math.min(playerRotationMultiplier * 1.14, 16); // exponential increase, capped
+      } else {
+        playerRotationMultiplier = Math.max(playerRotationMultiplier * 0.9, 1);   // decay back to normal
+      }
+
       // Tripling ALL blades as a group, interval = blades.length * 2 sec
       if (--tripleTimer <= 0) {
         if (blades.length < 243) {
@@ -478,7 +493,7 @@
           });
           blades = blades.concat(newBlades);
         }
-        tripleDelay = blades.length * 2 * 60; // blades × 2 sec × 60fps
+        tripleDelay = blades.length * 2 * 60;
         tripleTimer = tripleDelay;
       }
 
@@ -501,7 +516,13 @@
       }
 
       // Spin all blades
-      blades.forEach(blade => blade.angle += blade.spinSpeed);
+      blades.forEach((blade, i) => {
+        if (i === 0) {
+          blade.angle += blade.spinSpeed * playerRotationMultiplier; // exponential for player only
+        } else {
+          blade.angle += blade.spinSpeed;
+        }
+      });
 
       // --- Dot logic ---
       let dotKills = [];
