@@ -486,27 +486,35 @@
       return blade.type.name + "#" + blade.id;
     }
 
-    // --------- AI Logic for blades ---------
+    // --------- MODIFIED AI Logic for blades ---------
     function updateBladeAI() {
       blades.forEach(b => b.beingChased = false);
-      let runners = blades.filter(b => b.aiType === "runner");
-      let chasers = blades.filter(b => b.aiType === "chaser");
-      // Assign targets for chasers/killers
-      chasers.forEach(blade => {
-        // Retarget if needed
-        if (!blade.aiTarget || blade.aiRetargetTimer <= 0 || !runners.find(b => b.id === blade.aiTarget.id)) {
-          let possibleTargets = runners.length ? runners : blades.filter(b => b !== blade);
-          blade.aiTarget = possibleTargets[Math.floor(Math.random() * possibleTargets.length)];
-          blade.aiRetargetTimer = Math.floor(Math.random() * 90) + 45;
+
+      // For each non-player blade, determine target based on health rules
+      for (let i = 1; i < blades.length; ++i) {
+        let blade = blades[i];
+
+        // Find all other blades with lower or equal health
+        let lowerHealthBlades = blades.filter(b => b !== blade && b.health < blade.health);
+        let equalHealthBlades = blades.filter(b => b !== blade && b.health === blade.health);
+
+        let target = null;
+        if (lowerHealthBlades.length > 0) {
+          // Always chase one of the lower health blades (closest)
+          target = lowerHealthBlades.reduce((closest, b) => {
+            let dist = Math.hypot(b.x - blade.x, b.y - blade.y);
+            let closestDist = closest ? Math.hypot(closest.x - blade.x, closest.y - blade.y) : Infinity;
+            return dist < closestDist ? b : closest;
+          }, null);
+        } else if (equalHealthBlades.length > 0) {
+          // 50% chance to chase one of the equal health blades (random)
+          if (Math.random() < 0.5) {
+            target = equalHealthBlades[Math.floor(Math.random() * equalHealthBlades.length)];
+          }
         }
-        blade.aiRetargetTimer--;
-        if (blade.aiTarget && blade.aiTarget.id) {
-          let target = blades.find(b => b.id === blade.aiTarget.id);
-          if (target) target.beingChased = true;
-        }
-      });
-      // Assign movement for chasers/killers
-      chasers.forEach(blade => {
+        blade.aiTarget = target;
+
+        // Movement logic (chase target or wander)
         if (blade.aiTarget) {
           let dx = blade.aiTarget.x - blade.x;
           let dy = blade.aiTarget.y - blade.y;
@@ -523,19 +531,22 @@
               blade.vy = (blade.vy / vmag) * speed;
             }
           }
-        }
-      });
-      // Assign targets for runners
-      runners.forEach(blade => {
-        let chaser = chasers.find(c => c.aiTarget && c.aiTarget.id === blade.id);
-        if (chaser) {
-          let dx = blade.x - chaser.x;
-          let dy = blade.y - chaser.y;
+        } else {
+          // No target, wander randomly
+          if (!blade.aiWanderTimer || blade.aiWanderTimer-- <= 0) {
+            blade.aiWanderTarget = {
+              x: Math.random() * canvas.width,
+              y: Math.random() * canvas.height
+            };
+            blade.aiWanderTimer = Math.floor(Math.random() * 120) + 40;
+          }
+          let dx = blade.aiWanderTarget.x - blade.x;
+          let dy = blade.aiWanderTarget.y - blade.y;
           let dist = Math.hypot(dx, dy);
           if (dist > 1) {
-            let speed = Math.min(5.3, Math.max(2.4, dist / 80));
-            blade.vx += (dx / dist) * 0.25;
-            blade.vy += (dy / dist) * 0.25;
+            let speed = Math.min(2.7, Math.max(0.8, dist / 160));
+            blade.vx += (dx / dist) * 0.13;
+            blade.vy += (dy / dist) * 0.13;
             blade.vx *= 0.93;
             blade.vy *= 0.93;
             let vmag = Math.hypot(blade.vx, blade.vy);
@@ -544,37 +555,10 @@
               blade.vy = (blade.vy / vmag) * speed;
             }
           }
-        } else {
-          if (!blade.aiTarget || blade.aiRetargetTimer <= 0 || !blades.find(b => b.id === (blade.aiTarget && blade.aiTarget.id))) {
-            blade.aiTarget = {
-              x: Math.random() * canvas.width,
-              y: Math.random() * canvas.height,
-              id: null
-            };
-            blade.aiRetargetTimer = Math.floor(Math.random() * 120) + 40;
-          }
-          blade.aiRetargetTimer--;
-          if (blade.aiTarget) {
-            let dx = blade.aiTarget.x - blade.x;
-            let dy = blade.aiTarget.y - blade.y;
-            let dist = Math.hypot(dx, dy);
-            if (dist > 1) {
-              let speed = Math.min(2.7, Math.max(0.8, dist / 160));
-              blade.vx += (dx / dist) * 0.13;
-              blade.vy += (dy / dist) * 0.13;
-              blade.vx *= 0.93;
-              blade.vy *= 0.93;
-              let vmag = Math.hypot(blade.vx, blade.vy);
-              if (vmag > speed) {
-                blade.vx = (blade.vx / vmag) * speed;
-                blade.vy = (blade.vy / vmag) * speed;
-              }
-            }
-          }
         }
-      });
+      }
     }
-    // --------- End AI Logic ---------
+    // --------- End MODIFIED AI Logic ---------
 
     function animate() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -620,19 +604,26 @@
       if (keys['arrowleft']) playerBlade.x -= 5;
       if (keys['arrowright']) playerBlade.x += 5;
 
-      playerBlade.x = Math.max(0, Math.min(canvas.width, playerBlade.x));
-      playerBlade.y = Math.max(0, Math.min(canvas.height, playerBlade.y));
+      // Snake.io-style edge wrapping for player
+      if (playerBlade.x < 0) playerBlade.x = canvas.width;
+      if (playerBlade.x > canvas.width) playerBlade.x = 0;
+      if (playerBlade.y < 0) playerBlade.y = canvas.height;
+      if (playerBlade.y > canvas.height) playerBlade.y = 0;
 
       // AI movement for non-player blades
       updateBladeAI();
 
-      // Move other blades
+      // Move other blades with edge wrapping
       for (let i = 1; i < blades.length; ++i) {
         const blade = blades[i];
         blade.x += blade.vx;
         blade.y += blade.vy;
-        if (blade.x < 0 || blade.x > canvas.width) blade.vx *= -1;
-        if (blade.y < 0 || blade.y > canvas.height) blade.vy *= -1;
+
+        // Snake.io-style edge wrapping
+        if (blade.x < 0) blade.x = canvas.width;
+        if (blade.x > canvas.width) blade.x = 0;
+        if (blade.y < 0) blade.y = canvas.height;
+        if (blade.y > canvas.height) blade.y = 0;
       }
 
       // Spin all blades
