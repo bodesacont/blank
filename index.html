@@ -194,7 +194,7 @@
     }
 
     // Game logic variables
-    let blades, hearts, tripleTimer, tripleDelay, sparks, timerFrames, gameEnded, keys, globalKillMap, totalSaberDeaths, playerName, playerColor;
+    let blades, dots, tripleTimer, tripleDelay, sparks, timerFrames, gameEnded, keys, globalKillMap, totalSaberDeaths, playerName, playerColor;
     let bladeIdCounter = 0;
 
     function makeBlade(x, y, vx, vy, spinSpeed, length, bladeType, isPlayer = false, aiType = "random") {
@@ -258,15 +258,11 @@
       blades = [
         makeBlade(canvas.width / 2, canvas.height / 2, 0, 0, 0.08, 70, bladeTypes[0], true, "player")
       ].concat(spawnBlades(10, Math.min(canvas.width, canvas.height) / 3));
-      // Always spawn 20 hearts
-      hearts = [];
-      for (let i = 0; i < 20; ++i) {
-        hearts.push({
-          x: Math.random() * (canvas.width - 30) + 15,
-          y: Math.random() * (canvas.height - 30) + 15,
-          radius: 12 // slightly larger for visible heart shape, but still "small"
-        });
-      }
+      dots = [{
+        x: Math.random() * (canvas.width - 30) + 15,
+        y: Math.random() * (canvas.height - 30) + 15,
+        radius: 10
+      }];
       tripleTimer = blades.length * 2 * 60;
       tripleDelay = tripleTimer;
       sparks = [];
@@ -358,37 +354,109 @@
       });
     }
 
-    // Draw a small heart shape
-    function drawHeart(ctx, x, y, size) {
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.scale(size / 24, size / 24);
+    function drawDot(ctx, dot) {
       ctx.beginPath();
-      ctx.moveTo(12, 21);
-      ctx.bezierCurveTo(2, 13, 2, 6, 12, 6);
-      ctx.bezierCurveTo(22, 6, 22, 13, 12, 21);
-      ctx.closePath();
-      ctx.fillStyle = "#FF3A3A";
-      ctx.globalAlpha = 0.87;
+      ctx.arc(dot.x, dot.y, dot.radius, 0, Math.PI * 2);
+      ctx.fillStyle = "#fff";
       ctx.fill();
-      ctx.restore();
+      ctx.closePath();
     }
 
-    function drawHeartItem(ctx, heart) {
-      drawHeart(ctx, heart.x, heart.y, heart.radius);
+    function checkDotBladeCollision(blade, dot) {
+      const bladePoly = [
+        { x: -15, y: 7 },
+        { x: -15, y: 13 },
+        { x: blade.length, y: 13 },
+        { x: blade.length, y: 7 }
+      ];
+      const cos = Math.cos(blade.angle);
+      const sin = Math.sin(blade.angle);
+      const worldPoly = bladePoly.map(pt => ({
+        x: blade.x + pt.x * cos - pt.y * sin,
+        y: blade.y + pt.x * sin + pt.y * cos
+      }));
+      function pointInPoly(px, py, poly) {
+        let inside = false;
+        for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+          const xi = poly[i].x, yi = poly[i].y;
+          const xj = poly[j].x, yj = poly[j].y;
+          const intersect = ((yi > py) !== (yj > py)) &&
+            (px < (xj - xi) * (py - yi) / (yj - yi + 0.0001) + xi);
+          if (intersect) inside = !inside;
+        }
+        return inside;
+      }
+      if (pointInPoly(dot.x, dot.y, worldPoly)) return true;
+      for (let i = 0; i < worldPoly.length; i++) {
+        const a = worldPoly[i];
+        const b = worldPoly[(i + 1) % worldPoly.length];
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const l2 = dx * dx + dy * dy;
+        let t = ((dot.x - a.x) * dx + (dot.y - a.y) * dy) / l2;
+        t = Math.max(0, Math.min(1, t));
+        const closestX = a.x + t * dx;
+        const closestY = a.y + t * dy;
+        const dist = Math.hypot(closestX - dot.x, closestY - dot.y);
+        if (dist < dot.radius) return true;
+      }
+      return false;
     }
 
-    function checkHeartBladeCollision(blade, heart) {
-      // Use circle collision for simplicity (like original dot)
-      let dx = blade.x - heart.x;
-      let dy = blade.y - heart.y;
-      let dist = Math.hypot(dx, dy);
-      return dist < (heart.radius + 22); // 22 = blade's body approx size
+    function checkBladeBladeCollision(b1, b2) {
+      const r1 = getBladePolyWorld(b1);
+      const r2 = getBladePolyWorld(b2);
+      return polysIntersect(r1, r2);
     }
 
-    function respawnHeart(heartObj) {
-      heartObj.x = Math.random() * (canvas.width - 30) + 15;
-      heartObj.y = Math.random() * (canvas.height - 30) + 15;
+    function getBladePolyWorld(blade) {
+      const bladePoly = [
+        { x: -15, y: 7 },
+        { x: -15, y: 13 },
+        { x: blade.length, y: 13 },
+        { x: blade.length, y: 7 }
+      ];
+      const cos = Math.cos(blade.angle);
+      const sin = Math.sin(blade.angle);
+      return bladePoly.map(pt => ({
+        x: blade.x + pt.x * cos - pt.y * sin,
+        y: blade.y + pt.x * sin + pt.y * cos
+      }));
+    }
+
+    function polysIntersect(polyA, polyB) {
+      function getAxes(poly) {
+        const axes = [];
+        for (let i = 0; i < poly.length; i++) {
+          const p1 = poly[i];
+          const p2 = poly[(i + 1) % poly.length];
+          const edge = { x: p2.x - p1.x, y: p2.y - p1.y };
+          axes.push({ x: -edge.y, y: edge.x });
+        }
+        return axes;
+      }
+      function proj(poly, axis) {
+        let min = Infinity, max = -Infinity;
+        for (const p of poly) {
+          const val = p.x * axis.x + p.y * axis.y;
+          if (val < min) min = val;
+          if (val > max) max = val;
+        }
+        return { min, max };
+      }
+      const axesA = getAxes(polyA);
+      const axesB = getAxes(polyB);
+      for (const axis of axesA.concat(axesB)) {
+        const pA = proj(polyA, axis);
+        const pB = proj(polyB, axis);
+        if (pA.max < pB.min || pB.max < pA.min) return false;
+      }
+      return true;
+    }
+
+    function respawnDot(dotObj) {
+      dotObj.x = Math.random() * (canvas.width - 30) + 15;
+      dotObj.y = Math.random() * (canvas.height - 30) + 15;
     }
 
     function blendColors(c1, c2) {
@@ -552,50 +620,61 @@
       if (keys['arrowleft']) playerBlade.x -= 5;
       if (keys['arrowright']) playerBlade.x += 5;
 
-      // Snake.io-style edge wrapping for player
-      if (playerBlade.x < 0) playerBlade.x = canvas.width;
-      if (playerBlade.x > canvas.width) playerBlade.x = 0;
-      if (playerBlade.y < 0) playerBlade.y = canvas.height;
-      if (playerBlade.y > canvas.height) playerBlade.y = 0;
+      playerBlade.x = Math.max(0, Math.min(canvas.width, playerBlade.x));
+      playerBlade.y = Math.max(0, Math.min(canvas.height, playerBlade.y));
 
       // AI movement for non-player blades
       updateBladeAI();
 
-      // Move other blades with edge wrapping
+      // Move other blades
       for (let i = 1; i < blades.length; ++i) {
         const blade = blades[i];
         blade.x += blade.vx;
         blade.y += blade.vy;
-
-        // Snake.io-style edge wrapping
-        if (blade.x < 0) blade.x = canvas.width;
-        if (blade.x > canvas.width) blade.x = 0;
-        if (blade.y < 0) blade.y = canvas.height;
-        if (blade.y > canvas.height) blade.y = 0;
+        if (blade.x < 0 || blade.x > canvas.width) blade.vx *= -1;
+        if (blade.y < 0 || blade.y > canvas.height) blade.vy *= -1;
       }
 
       // Spin all blades
       blades.forEach(blade => blade.angle += blade.spinSpeed);
 
-      // --- Heart logic ---
-      let heartKills = [];
-      hearts.forEach((heartObj, heartIdx) => {
+      // --- Dot logic ---
+      let dotKills = [];
+      dots.forEach((dotObj, dotIdx) => {
         blades.forEach((blade, bladeIdx) => {
-          if (checkHeartBladeCollision(blade, heartObj)) {
-            heartKills.push({ heartIdx, bladeIdx });
+          if (checkDotBladeCollision(blade, dotObj)) {
+            dotKills.push({ dotIdx, bladeIdx });
           }
         });
       });
-      if (heartKills.length > 0) {
-        let heartsToRespawn = {};
-        heartKills.forEach(kill => {
+      if (dotKills.length > 0) {
+        let bladesKilled = {};
+        dotKills.forEach(kill => {
           let blade = blades[kill.bladeIdx];
           blade.health = Math.min(blade.maxHealth, blade.health + 20);
           blade.length = Math.min(120, blade.length + 10);
-          heartsToRespawn[kill.heartIdx] = true;
+          bladesKilled[kill.dotIdx] = true;
         });
-        for (const idx of Object.keys(heartsToRespawn)) {
-          respawnHeart(hearts[idx]);
+        let killedDotIndices = Object.keys(bladesKilled).map(Number);
+        if (dots.length < 27) {
+          let newDots = [];
+          for (const dotIdx of killedDotIndices) {
+            respawnDot(dots[dotIdx]);
+            for (let t = 0; t < 2; t++) {
+              newDots.push({
+                x: Math.random() * (canvas.width - 30) + 15,
+                y: Math.random() * (canvas.height - 30) + 15,
+                radius: 10
+              });
+            }
+          }
+          dots = dots.concat(newDots);
+        } else {
+          dots = [{
+            x: Math.random() * (canvas.width - 30) + 15,
+            y: Math.random() * (canvas.height - 30) + 15,
+            radius: 10
+          }];
         }
       }
 
@@ -658,7 +737,7 @@
         ctx.restore();
       });
 
-      hearts.forEach(heart => drawHeartItem(ctx, heart));
+      dots.forEach(dot => drawDot(ctx, dot));
       drawSparks(ctx);
 
       deathCountDiv.textContent = "Total Lightsaber Deaths: " + totalSaberDeaths;
