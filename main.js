@@ -1,0 +1,739 @@
+// --- GAME CONSTANTS ---
+const WORLD_WIDTH = 2400;
+const WORLD_HEIGHT = 1600;
+
+// --- UI Elements ---
+const canvas = document.getElementById('dvdCanvas');
+const ctx = canvas.getContext('2d');
+const deathCountDiv = document.getElementById('deathCount');
+const timerDisplay = document.getElementById('timerDisplay');
+const leaderboardDiv = document.getElementById('leaderboard');
+const startPanel = document.getElementById('startPanel');
+const startBtn = document.getElementById('startBtn');
+const playAgainBtn = document.getElementById('playAgainBtn');
+const playerNameInput = document.getElementById('playerName');
+const playerColorInput = document.getElementById('playerColor');
+const bladeStyleSelect = document.getElementById('bladeStyle');
+const gameTimeInput = document.getElementById('gameTime');
+const multiColorGroup = document.getElementById('multiColorGroup');
+
+// --- Resize ---
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+// --- Utility ---
+function randomColor() {
+  return "#" + Math.floor(Math.random() * 16777215).toString(16).padStart(6, "0");
+}
+
+// --- Blade Setup ---
+function randomBladeStyleAndColors() {
+  const styles = ["solid", "rainbow", "striped", "custom"];
+  const style = styles[Math.floor(Math.random() * styles.length)];
+  let colors;
+  if (style === "solid") {
+    colors = [randomColor()];
+  } else if (style === "striped") {
+    colors = [randomColor(), randomColor(), randomColor()];
+  } else if (style === "rainbow") {
+    colors = ["#FF0000", "#FF7F00", "#FFFF00", "#00FF00", "#0000FF", "#4B0082", "#9400D3"];
+  } else {
+    const num = Math.floor(Math.random() * 4) + 2;
+    colors = Array.from({ length: num }, randomColor);
+  }
+  return { style, colors };
+}
+
+function getPlayerBladeColorsAndStyle() {
+  const style = bladeStyleSelect.value;
+  let colors;
+  if (style === "solid") {
+    colors = [playerColorInput.value];
+  } else if (style === "striped") {
+    colors = ["#FF0000", "#FFFFFF", "#0000FF"];
+  } else if (style === "rainbow") {
+    colors = ["#FF0000", "#FF7F00", "#FFFF00", "#00FF00", "#0000FF", "#4B0082", "#9400D3"];
+  } else {
+    colors = Array.from(multiColorGroup.querySelectorAll('.customColorInput')).map(i => i.value);
+    if (colors.length < 2) colors = [playerColorInput.value, "#FFFFFF"];
+  }
+  return { style, colors };
+}
+
+// --- Game Variables ---
+let blades, dots, tripleTimer, tripleDelay, sparks, timerFrames, gameEnded, keys, globalKillMap, totalSaberDeaths, playerName, playerColors, playerBladeStyle;
+let bladeIdCounter = 0;
+
+// --- Camera ---
+function getCameraPosition(player) {
+  let camX = Math.max(canvas.width / 2, Math.min(WORLD_WIDTH - canvas.width / 2, player.x));
+  let camY = Math.max(canvas.height / 2, Math.min(WORLD_HEIGHT - canvas.height / 2, player.y));
+  return { x: camX, y: camY };
+}
+
+// --- Blade Model ---
+function makeBlade(x, y, vx, vy, spinSpeed, length, isPlayer = false, aiType = "random", style = "solid", colors = ["#39FF14"]) {
+  bladeIdCounter += 1;
+  return {
+    x, y, vx, vy,
+    angle: 0,
+    spinSpeed,
+    length,
+    height: 20,
+    hiltColor: "#333",
+    isPlayer,
+    kills: [],
+    health: 100,
+    maxHealth: 100,
+    glow: isPlayer ? 22 : 18,
+    id: bladeIdCounter,
+    lastAttacker: null,
+    lastDeathCount: 0,
+    aiTarget: null,
+    aiRetargetTimer: 0,
+    aiType: aiType,
+    beingChased: false,
+    name: isPlayer ? playerName : undefined,
+    style,
+    colors,
+  };
+}
+
+function spawnBlades(num, spread = 260) {
+  let arr = [];
+  let types = [];
+  for (let i = 0; i < num; ++i) types.push(i < Math.floor(num / 2) ? "chaser" : "runner");
+  for (let i = types.length - 1; i > 0; i--) {
+    let j = Math.floor(Math.random() * (i + 1));
+    [types[i], types[j]] = [types[j], types[i]];
+  }
+  for (let i = 0; i < num; ++i) {
+    let angle = (Math.PI * 2 * i) / num;
+    let dist = Math.random() * 60 + spread + Math.random() * 100;
+    let cx = WORLD_WIDTH / 2 + Math.cos(angle) * dist + Math.random() * 70 - 35;
+    let cy = WORLD_HEIGHT / 2 + Math.sin(angle) * dist + Math.random() * 70 - 35;
+    let { style, colors } = randomBladeStyleAndColors();
+    arr.push(makeBlade(
+      cx,
+      cy,
+      Math.random() * 4 - 2,
+      Math.random() * 4 - 2,
+      Math.random() * 0.1 + 0.05,
+      Math.floor(Math.random() * 60) + 50,
+      false,
+      types[i],
+      style,
+      colors
+    ));
+  }
+  return arr;
+}
+
+// --- Init Vars ---
+function initGameVars() {
+  bladeIdCounter = 0;
+  const { style, colors } = getPlayerBladeColorsAndStyle();
+  playerBladeStyle = style;
+  playerColors = colors;
+  blades = [
+    makeBlade(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, 0, 0, 0.08, 70, true, "player", style, colors)
+  ].concat(spawnBlades(10, Math.min(WORLD_WIDTH, WORLD_HEIGHT) / 3));
+  dots = [];
+  for (let i = 0; i < 12; i++) {
+    dots.push({
+      x: Math.random() * (WORLD_WIDTH - 30) + 15,
+      y: Math.random() * (WORLD_HEIGHT - 30) + 15,
+      radius: 10
+    });
+  }
+  tripleTimer = blades.length * 2 * 60;
+  tripleDelay = tripleTimer;
+  sparks = [];
+  timerFrames = Math.max(10, Math.min(600, Number(gameTimeInput.value))) * 60;
+  gameEnded = false;
+  keys = {};
+  globalKillMap = {};
+  totalSaberDeaths = 0;
+  window.onkeydown = e => keys[e.key.toLowerCase()] = true;
+  window.onkeyup = e => keys[e.key.toLowerCase()] = false;
+}
+
+// --- UI Logic ---
+function showGameButtons(startPanelVisible, playAgainVisible) {
+  startPanel.style.display = startPanelVisible ? "" : "none";
+  playAgainBtn.style.display = playAgainVisible ? "" : "none";
+}
+startBtn.onclick = () => {
+  playerName = playerNameInput.value.trim() || "Player";
+  showGameButtons(false, false);
+  leaderboardDiv.style.display = "none";
+  deathCountDiv.style.display = "";
+  timerDisplay.style.display = "";
+  initGameVars();
+  animate();
+};
+playAgainBtn.onclick = () => {
+  showGameButtons(false, false);
+  leaderboardDiv.style.display = "none";
+  deathCountDiv.style.display = "";
+  timerDisplay.style.display = "";
+  initGameVars();
+  animate();
+};
+
+// --- DRAW BLADES ---
+function drawLightsaber(ctx, blade) {
+  ctx.save();
+  ctx.shadowColor = blade.colors[0];
+  ctx.shadowBlur = blade.glow || 18;
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = blade.colors[0];
+  ctx.beginPath();
+  ctx.moveTo(-15, 7);
+  ctx.lineTo(-15, 13);
+  ctx.lineTo(blade.length, 13);
+  ctx.lineTo(blade.length, 7);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.fillStyle = blade.hiltColor;
+  ctx.fillRect(-15, 7, 15, 6);
+
+  // Multi-color faded blade
+  ctx.save();
+  ctx.translate(0, 7);
+  ctx.beginPath();
+  ctx.rect(0, -2, blade.length - 15, 8);
+  ctx.closePath();
+  let grad = ctx.createLinearGradient(0, 0, blade.length - 15, 0);
+
+  if (blade.style === "solid") {
+    grad.addColorStop(0, blade.colors[0]);
+    grad.addColorStop(1, blade.colors[0] + "00");
+  } else if (blade.style === "rainbow" || blade.style === "custom" || blade.style === "striped") {
+    let stops = blade.colors.length;
+    blade.colors.forEach((color, i) => {
+      let faded = color + (i === stops - 1 ? "00" : "ff");
+      grad.addColorStop(i / (stops - 1), faded);
+    });
+  }
+  ctx.globalAlpha = 0.72;
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, -2, blade.length - 15, 8);
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(blade.length - 15, 5);
+  ctx.beginPath();
+  ctx.arc(0, 5, 6, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.globalAlpha = 0.77;
+  ctx.fillStyle = blade.colors[blade.colors.length-1];
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawKills(ctx, blade) {
+  ctx.save();
+  ctx.font = "bold 18px monospace";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "bottom";
+  ctx.translate(0, -28);
+  ctx.fillStyle = blade.colors[0];
+  ctx.strokeStyle = "#000";
+  ctx.lineWidth = 2;
+  if (blade.isPlayer && blade.name) {
+    ctx.font = "bold 20px monospace";
+    ctx.strokeText(blade.name, 0, -20);
+    ctx.fillText(blade.name, 0, -20);
+    ctx.font = "bold 18px monospace";
+  }
+  if (blade.kills.length > 0) {
+    ctx.strokeText("Killed: " + blade.kills.join(","), 0, 0);
+    ctx.fillText("Killed: " + blade.kills.join(","), 0, 0);
+  }
+  ctx.restore();
+}
+
+function drawHealthBar(ctx, blade) {
+  ctx.save();
+  ctx.translate(0, -10);
+  const barWidth = 60, barHeight = 8;
+  ctx.fillStyle = "#222";
+  ctx.fillRect(-barWidth / 2, 0, barWidth, barHeight);
+  let healthRatio = Math.max(0, blade.health) / blade.maxHealth;
+  ctx.fillStyle = healthRatio > 0.5 ? "#39FF14"
+    : healthRatio > 0.25 ? "#FFD700" : "#FF4444";
+  ctx.fillRect(-barWidth / 2, 0, barWidth * healthRatio, barHeight);
+  ctx.strokeStyle = "#fff";
+  ctx.strokeRect(-barWidth / 2, 0, barWidth, barHeight);
+  ctx.restore();
+}
+
+function drawSparks(ctx, camera) {
+  sparks = sparks.filter(spark => spark.life > 0);
+  sparks.forEach(spark => {
+    ctx.save();
+    ctx.globalAlpha = spark.life / spark.maxLife;
+    ctx.strokeStyle = spark.color;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(spark.x - camera.x + canvas.width/2, spark.y - camera.y + canvas.height/2);
+    ctx.lineTo(spark.x + spark.dx - camera.x + canvas.width/2, spark.y + spark.dy - camera.y + canvas.height/2);
+    ctx.stroke();
+    ctx.restore();
+    spark.x += spark.dx * 0.25;
+    spark.y += spark.dy * 0.25;
+    spark.life--;
+    // WRAP sparks
+    spark.x = (spark.x + WORLD_WIDTH) % WORLD_WIDTH;
+    spark.y = (spark.y + WORLD_HEIGHT) % WORLD_HEIGHT;
+  });
+}
+
+function drawDot(ctx, dot, camera) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(dot.x - camera.x + canvas.width/2, dot.y - camera.y + canvas.height/2, dot.radius, 0, Math.PI * 2);
+  ctx.fillStyle = "#fff";
+  ctx.shadowColor = "#FFD700";
+  ctx.shadowBlur = 20;
+  ctx.globalAlpha = 0.8;
+  ctx.fill();
+  ctx.closePath();
+  ctx.globalAlpha = 1;
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+// --- Wrapping collision helpers ---
+function wrapDist(x1, x2, size) {
+  let d = x2 - x1;
+  if (Math.abs(d) > size / 2) {
+    d -= Math.sign(d) * size;
+  }
+  return d;
+}
+function getWrappedPosition(x, size) {
+  return (x + size) % size;
+}
+
+// --- Dot <-> Blade collision (world wrap aware) ---
+function checkDotBladeCollision(blade, dot) {
+  // Calculate all possible wrapped positions
+  const positions = [
+    {dx: 0, dy: 0},
+    {dx: WORLD_WIDTH, dy: 0},
+    {dx: -WORLD_WIDTH, dy: 0},
+    {dx: 0, dy: WORLD_HEIGHT},
+    {dx: 0, dy: -WORLD_HEIGHT},
+    {dx: WORLD_WIDTH, dy: WORLD_HEIGHT},
+    {dx: -WORLD_WIDTH, dy: -WORLD_HEIGHT},
+    {dx: WORLD_WIDTH, dy: -WORLD_HEIGHT},
+    {dx: -WORLD_WIDTH, dy: WORLD_HEIGHT},
+  ];
+  for (let pos of positions) {
+    if (checkPolyCircleCollision(blade, dot, pos.dx, pos.dy)) return true;
+  }
+  return false;
+}
+
+function checkPolyCircleCollision(blade, dot, dx, dy) {
+  const bladePoly = [
+    { x: -15, y: 7 },
+    { x: -15, y: 13 },
+    { x: blade.length, y: 13 },
+    { x: blade.length, y: 7 }
+  ];
+  const cos = Math.cos(blade.angle);
+  const sin = Math.sin(blade.angle);
+  const worldPoly = bladePoly.map(pt => ({
+    x: blade.x + pt.x * cos - pt.y * sin + dx,
+    y: blade.y + pt.x * sin + pt.y * cos + dy
+  }));
+  function pointInPoly(px, py, poly) {
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const xi = poly[i].x, yi = poly[i].y;
+      const xj = poly[j].x, yj = poly[j].y;
+      const intersect = ((yi > py) !== (yj > py)) &&
+        (px < (xj - xi) * (py - yi) / (yj - yi + 0.0001) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+  if (pointInPoly(dot.x, dot.y, worldPoly)) return true;
+  for (let i = 0; i < worldPoly.length; i++) {
+    const a = worldPoly[i];
+    const b = worldPoly[(i + 1) % worldPoly.length];
+    const dxl = b.x - a.x;
+    const dyl = b.y - a.y;
+    const l2 = dxl * dxl + dyl * dyl;
+    let t = ((dot.x - a.x) * dxl + (dot.y - a.y) * dyl) / l2;
+    t = Math.max(0, Math.min(1, t));
+    const closestX = a.x + t * dxl;
+    const closestY = a.y + t * dyl;
+    const dist = Math.hypot(closestX - dot.x, closestY - dot.y);
+    if (dist < dot.radius) return true;
+  }
+  return false;
+}
+
+function blendColors(c1, c2) {
+  function hexToRgb(hex) {
+    hex = hex.replace("#", "");
+    return [
+      parseInt(hex.substring(0, 2), 16),
+      parseInt(hex.substring(2, 4), 16),
+      parseInt(hex.substring(4, 6), 16)
+    ];
+  }
+  function rgbToHex(r, g, b) {
+    return "#" + [r, g, b].map(x => x.toString(16).padStart(2, "0")).join("");
+  }
+  let rgb1 = hexToRgb(c1), rgb2 = hexToRgb(c2);
+  return rgbToHex(
+    Math.floor((rgb1[0] + rgb2[0]) / 2),
+    Math.floor((rgb1[1] + rgb2[1]) / 2),
+    Math.floor((rgb1[2] + rgb2[2]) / 2)
+  );
+}
+
+function getBladeDisplay(blade) {
+  if (!blade) return "Unknown";
+  if (blade.isPlayer && blade.name) return blade.name;
+  if (blade.isPlayer) return "Player";
+  return "Blade#" + blade.id;
+}
+
+// --- AI Logic ---
+function updateBladeAI() {
+  blades.forEach(b => b.beingChased = false);
+  let runners = blades.filter(b => b.aiType === "runner");
+  let chasers = blades.filter(b => b.aiType === "chaser");
+  chasers.forEach(blade => {
+    if (!blade.aiTarget || blade.aiRetargetTimer <= 0 || !runners.find(b => b.id === blade.aiTarget.id)) {
+      let possibleTargets = runners.length ? runners : blades.filter(b => b !== blade);
+      blade.aiTarget = possibleTargets[Math.floor(Math.random() * possibleTargets.length)];
+      blade.aiRetargetTimer = Math.floor(Math.random() * 90) + 45;
+    }
+    blade.aiRetargetTimer--;
+    if (blade.aiTarget && blade.aiTarget.id) {
+      let target = blades.find(b => b.id === blade.aiTarget.id);
+      if (target) target.beingChased = true;
+    }
+  });
+  chasers.forEach(blade => {
+    if (blade.aiTarget) {
+      let dx = wrapDist(blade.x, blade.aiTarget.x, WORLD_WIDTH);
+      let dy = wrapDist(blade.y, blade.aiTarget.y, WORLD_HEIGHT);
+      let dist = Math.hypot(dx, dy);
+      if (dist > 1) {
+        let speed = Math.min(5.5, Math.max(2.6, dist / 80));
+        blade.vx += (dx / dist) * 0.28;
+        blade.vy += (dy / dist) * 0.28;
+        blade.vx *= 0.93;
+        blade.vy *= 0.93;
+        let vmag = Math.hypot(blade.vx, blade.vy);
+        if (vmag > speed) {
+          blade.vx = (blade.vx / vmag) * speed;
+          blade.vy = (blade.vy / vmag) * speed;
+        }
+      }
+    }
+  });
+  runners.forEach(blade => {
+    let chaser = chasers.find(c => c.aiTarget && c.aiTarget.id === blade.id);
+    if (chaser) {
+      let dx = wrapDist(blade.x, chaser.x, WORLD_WIDTH);
+      let dy = wrapDist(blade.y, chaser.y, WORLD_HEIGHT);
+      let dist = Math.hypot(dx, dy);
+      if (dist > 1) {
+        let speed = Math.min(5.3, Math.max(2.4, dist / 80));
+        blade.vx += (dx / dist) * 0.25;
+        blade.vy += (dy / dist) * 0.25;
+        blade.vx *= 0.93;
+        blade.vy *= 0.93;
+        let vmag = Math.hypot(blade.vx, blade.vy);
+        if (vmag > speed) {
+          blade.vx = (blade.vx / vmag) * speed;
+          blade.vy = (blade.vy / vmag) * speed;
+        }
+      }
+    } else {
+      if (!blade.aiTarget || blade.aiRetargetTimer <= 0 || !blades.find(b => b.id === (blade.aiTarget && blade.aiTarget.id))) {
+        blade.aiTarget = {
+          x: Math.random() * WORLD_WIDTH,
+          y: Math.random() * WORLD_HEIGHT,
+          id: null
+        };
+        blade.aiRetargetTimer = Math.floor(Math.random() * 120) + 40;
+      }
+      blade.aiRetargetTimer--;
+      if (blade.aiTarget) {
+        let dx = wrapDist(blade.x, blade.aiTarget.x, WORLD_WIDTH);
+        let dy = wrapDist(blade.y, blade.aiTarget.y, WORLD_HEIGHT);
+        let dist = Math.hypot(dx, dy);
+        if (dist > 1) {
+          let speed = Math.min(2.7, Math.max(0.8, dist / 160));
+          blade.vx += (dx / dist) * 0.13;
+          blade.vy += (dy / dist) * 0.13;
+          blade.vx *= 0.93;
+          blade.vy *= 0.93;
+          let vmag = Math.hypot(blade.vx, blade.vy);
+          if (vmag > speed) {
+            blade.vx = (blade.vx / vmag) * speed;
+            blade.vy = (blade.vy / vmag) * speed;
+          }
+        }
+      }
+    }
+  });
+}
+
+// --- ANIMATE ---
+function animate() {
+  const playerBlade = blades[0];
+  const camera = getCameraPosition(playerBlade);
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Draw boundary
+  ctx.save();
+  ctx.translate(-camera.x + canvas.width / 2, -camera.y + canvas.height / 2);
+  ctx.strokeStyle = "#FFD700";
+  ctx.lineWidth = 10;
+  ctx.strokeRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+  ctx.restore();
+
+  // TIMER logic
+  if (!gameEnded) {
+    timerFrames--;
+    let secondsLeft = Math.max(0, Math.floor(timerFrames / 60));
+    let min = Math.floor(secondsLeft / 60);
+    let sec = secondsLeft % 60;
+    timerDisplay.textContent = "Time Left: " +
+      (min < 10 ? "0" : "") + min + ":" +
+      (sec < 10 ? "0" : "") + sec;
+    if (timerFrames <= 0) {
+      gameEnded = true;
+      timerDisplay.textContent = "Game Over";
+      deathCountDiv.style.display = "none";
+      timerDisplay.style.display = "none";
+      showLeaderboard();
+      return;
+    }
+  }
+  if (gameEnded) return;
+
+  // Tripling ALL blades as a group
+  if (--tripleTimer <= 0) {
+    if (blades.length < 243) {
+      let newBlades = spawnBlades(2 + Math.floor(blades.length / 5), Math.min(WORLD_WIDTH, WORLD_HEIGHT) / 2.9);
+      blades = blades.concat(newBlades);
+    }
+    tripleDelay = blades.length * 2 * 60;
+    tripleTimer = tripleDelay;
+  }
+
+  // Player movement
+  playerBlade.x += (keys['a'] ? -5 : 0) + (keys['d'] ? 5 : 0) + (keys['arrowleft'] ? -5 : 0) + (keys['arrowright'] ? 5 : 0);
+  playerBlade.y += (keys['w'] ? -5 : 0) + (keys['s'] ? 5 : 0) + (keys['arrowup'] ? -5 : 0) + (keys['arrowdown'] ? 5 : 0);
+
+  // WRAP player position
+  playerBlade.x = getWrappedPosition(playerBlade.x, WORLD_WIDTH);
+  playerBlade.y = getWrappedPosition(playerBlade.y, WORLD_HEIGHT);
+
+  // AI movement for non-player blades
+  updateBladeAI();
+
+  // Move other blades + wrap
+  for (let i = 1; i < blades.length; ++i) {
+    const blade = blades[i];
+    blade.x += blade.vx;
+    blade.y += blade.vy;
+    blade.x = getWrappedPosition(blade.x, WORLD_WIDTH);
+    blade.y = getWrappedPosition(blade.y, WORLD_HEIGHT);
+  }
+
+  // Spin all blades
+  blades.forEach(blade => blade.angle += blade.spinSpeed);
+
+  // --- Dot logic ---
+  let dotKills = [];
+  dots.forEach((dotObj, dotIdx) => {
+    blades.forEach((blade, bladeIdx) => {
+      if (checkDotBladeCollision(blade, dotObj)) {
+        dotKills.push({ dotIdx, bladeIdx });
+      }
+    });
+  });
+  if (dotKills.length > 0) {
+    let bladesKilled = {};
+    dotKills.forEach(kill => {
+      let blade = blades[kill.bladeIdx];
+      blade.health = Math.min(blade.maxHealth, blade.health + 20);
+      blade.length = Math.min(120, blade.length + 10);
+      bladesKilled[kill.dotIdx] = true;
+    });
+    let killedDotIndices = Object.keys(bladesKilled).map(Number);
+    killedDotIndices.forEach(dotIdx => {
+      dots[dotIdx].x = Math.random() * (WORLD_WIDTH - 30) + 15;
+      dots[dotIdx].y = Math.random() * (WORLD_HEIGHT - 30) + 15;
+      // Add more health dots but don't reset to just 1
+      if (dots.length < 18) {
+        dots.push({
+          x: Math.random() * (WORLD_WIDTH - 30) + 15,
+          y: Math.random() * (WORLD_HEIGHT - 30) + 15,
+          radius: 10
+        });
+      }
+    });
+  }
+
+  // Blade vs blade collision & sparks
+  let deadBladeIndices = [];
+  for (let i = 0; i < blades.length; ++i) {
+    for (let j = i + 1; j < blades.length; ++j) {
+      // Wrap-aware blade-blade collision
+      let wrapPairs = [
+        {dx: 0, dy: 0},
+        {dx: WORLD_WIDTH, dy: 0},
+        {dx: -WORLD_WIDTH, dy: 0},
+        {dx: 0, dy: WORLD_HEIGHT},
+        {dx: 0, dy: -WORLD_HEIGHT},
+      ];
+      let collided = false;
+      for (let wp of wrapPairs) {
+        let b1 = {...blades[i], x: blades[i].x, y: blades[i].y};
+        let b2 = {...blades[j], x: blades[j].x + wp.dx, y: blades[j].y + wp.dy};
+        if (checkBladeBladeCollision(b1, b2)) {
+          collided = true;
+          break;
+        }
+      }
+      if (collided) {
+        blades[i].health = Math.max(0, blades[i].health - 2);
+        blades[j].health = Math.max(0, blades[j].health - 2);
+        blades[i].length = Math.max(30, blades[i].length - 5);
+        blades[j].length = Math.max(30, blades[j].length - 5);
+        if (blades[i].health <= 0) blades[i].lastAttacker = blades[j];
+        else blades[i].lastAttacker = blades[j];
+        if (blades[j].health <= 0) blades[j].lastAttacker = blades[i];
+        else blades[j].lastAttacker = blades[i];
+        if (blades[i].colors[0] && blades[j].colors[0]) {
+          let sx = (blades[i].x + blades[j].x) / 2;
+          let sy = (blades[i].y + blades[j].y) / 2;
+          for (let s = 0; s < 8; s++) {
+            let theta = Math.random() * Math.PI * 2;
+            let len = Math.random() * 25 + 10;
+            sparks.push({
+              x: sx, y: sy,
+              dx: Math.cos(theta) * len,
+              dy: Math.sin(theta) * len,
+              color: blendColors(blades[i].colors[0], blades[j].colors[0]),
+              life: 16, maxLife: 16
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // Remove dead blades and update killer's kills/deathcount
+  let bladesToRemove = blades.filter(blade => blade.health <= 0);
+  bladesToRemove.forEach(deadBlade => {
+    if (deadBlade.lastAttacker && deadBlade.lastAttacker !== deadBlade) {
+      deadBlade.lastAttacker.kills.push(deadBlade.id);
+      globalKillMap[deadBlade.lastAttacker.id] = (globalKillMap[deadBlade.lastAttacker.id] || []).concat(deadBlade.id);
+      deadBlade.lastAttacker.lastDeathCount = 1;
+      setTimeout(() => { deadBlade.lastAttacker.lastDeathCount = 0; }, 1000);
+      totalSaberDeaths += 1;
+    }
+  });
+  blades = blades.filter(blade => blade.health > 0);
+
+  // Draw blades with wrap
+  blades.forEach(blade => {
+    let wrapPairs = [
+      {dx: 0, dy: 0},
+      {dx: WORLD_WIDTH, dy: 0},
+      {dx: -WORLD_WIDTH, dy: 0},
+      {dx: 0, dy: WORLD_HEIGHT},
+      {dx: 0, dy: -WORLD_HEIGHT},
+    ];
+    for (let wp of wrapPairs) {
+      ctx.save();
+      ctx.translate(blade.x + wp.dx - camera.x + canvas.width / 2, blade.y + wp.dy - camera.y + canvas.height / 2);
+      ctx.rotate(blade.angle);
+      drawLightsaber(ctx, blade);
+      drawHealthBar(ctx, blade);
+      drawKills(ctx, blade);
+      ctx.restore();
+    }
+  });
+
+  // Draw dots with wrap
+  dots.forEach(dot => {
+    let wrapPairs = [
+      {dx: 0, dy: 0},
+      {dx: WORLD_WIDTH, dy: 0},
+      {dx: -WORLD_WIDTH, dy: 0},
+      {dx: 0, dy: WORLD_HEIGHT},
+      {dx: 0, dy: -WORLD_HEIGHT},
+    ];
+    for (let wp of wrapPairs) {
+      drawDot(ctx, {x: dot.x + wp.dx, y: dot.y + wp.dy, radius: dot.radius}, camera);
+    }
+  });
+
+  drawSparks(ctx, camera);
+
+  deathCountDiv.textContent = "Total Lightsaber Deaths: " + totalSaberDeaths;
+
+  requestAnimationFrame(animate);
+}
+
+function showLeaderboard() {
+  let bladeKillArr = [];
+  for (let id in globalKillMap) {
+    bladeKillArr.push({
+      id,
+      kills: globalKillMap[id].length
+    });
+  }
+  blades.forEach(blade => {
+    bladeKillArr.push({
+      id: blade.id,
+      kills: blade.kills.length
+    });
+  });
+  let dedupKillMap = {};
+  bladeKillArr.forEach(b => {
+    dedupKillMap[b.id] = Math.max(dedupKillMap[b.id] || 0, b.kills);
+  });
+  let sortedBlades = Object.entries(dedupKillMap).map(([id, kills]) => {
+    let blade = blades.find(b => b.id == id);
+    let display = blade ? getBladeDisplay(blade) : ("Blade#" + id);
+    return { display, kills };
+  }).sort((a, b) => b.kills - a.kills);
+
+  leaderboardDiv.innerHTML =
+    `<h2>Top 3 Killers</h2>
+     <ol>${sortedBlades.slice(0, 3).map(b =>
+      `<li>${b.display}: ${b.kills} lightsabers killed</li>`
+    ).join('')}
+     </ol>`;
+  leaderboardDiv.style.display = "block";
+  showGameButtons(false, true);
+}
+
+showGameButtons(true, false);
+deathCountDiv.style.display = "none";
+timerDisplay.style.display = "none";
+leaderboardDiv.style.display = "none";
