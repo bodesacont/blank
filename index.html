@@ -71,6 +71,7 @@
     #startPanel input[type="text"] { font-size: 18px; padding: 4px 12px; border-radius: 6px; border: 1px solid #FFD700; margin-bottom: 10px; }
     #startPanel input[type="color"] { width: 48px; height: 36px; margin-left: 12px; vertical-align: middle;}
     #startPanel select, #startPanel input[type="number"] { font-size: 18px; border-radius: 6px; border: 1px solid #FFD700; padding: 4px 12px; }
+    #startPanel .multi-color-group { margin-bottom: 10px; }
     #startPanel button {
       margin-top: 22px;
       font-size: 28px;
@@ -108,8 +109,27 @@
     <h1>Spinning Lightsaber Death Game</h1>
     <label for="playerName">Player Name:</label>
     <input type="text" id="playerName" value="Player" maxlength="18">
-    <label for="playerColor">Player Color:</label>
-    <input type="color" id="playerColor" value="#39FF14">
+
+    <label for="bladeStyle">Blade Style:</label>
+    <select id="bladeStyle">
+      <option value="solid">Solid</option>
+      <option value="rainbow">Rainbow</option>
+      <option value="striped">Red-White-Blue</option>
+      <option value="custom">Custom Multi-Color</option>
+    </select>
+
+    <div id="solidColorGroup" class="multi-color-group">
+      <label for="playerColor">Blade Color:</label>
+      <input type="color" id="playerColor" value="#39FF14">
+    </div>
+    <div id="multiColorGroup" class="multi-color-group" style="display:none;">
+      <label>Blade Colors:</label>
+      <input type="color" class="customColorInput" value="#FF0000">
+      <input type="color" class="customColorInput" value="#FFFFFF">
+      <input type="color" class="customColorInput" value="#0000FF">
+      <button type="button" id="addColorBtn" style="font-size:16px; margin-left:12px;">+</button>
+    </div>
+
     <label for="gameTime">Game Time (sec):</label>
     <input type="number" id="gameTime" min="10" max="600" value="60">
     <br>
@@ -118,6 +138,31 @@
   <button id="playAgainBtn">Play Again</button>
   <canvas id="dvdCanvas"></canvas>
   <script>
+    // Multi-color selector logic
+    const bladeStyleSelect = document.getElementById('bladeStyle');
+    const solidColorGroup = document.getElementById('solidColorGroup');
+    const multiColorGroup = document.getElementById('multiColorGroup');
+    const addColorBtn = document.getElementById('addColorBtn');
+
+    bladeStyleSelect.addEventListener('change', function() {
+      if (bladeStyleSelect.value === 'solid') {
+        solidColorGroup.style.display = '';
+        multiColorGroup.style.display = 'none';
+      } else {
+        solidColorGroup.style.display = 'none';
+        multiColorGroup.style.display = '';
+      }
+    });
+
+    addColorBtn.addEventListener('click', function() {
+      const inp = document.createElement('input');
+      inp.type = 'color';
+      inp.className = 'customColorInput';
+      inp.value = '#FFFFFF';
+      multiColorGroup.insertBefore(inp, addColorBtn);
+    });
+
+    // --- Game logic ---
     const canvas = document.getElementById('dvdCanvas');
     const ctx = canvas.getContext('2d');
     const deathCountDiv = document.getElementById('deathCount');
@@ -137,74 +182,33 @@
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
-    // Blade types
-    const bladeTypes = [
-      {
-        name: "lightsaber-green",
-        bladeColor: "#39FF14",
-        tipColor: "#39FF14",
-        glow: 18,
-        draw: drawLightsaber
-      },
-      {
-        name: "lightsaber-yellow",
-        bladeColor: "#FFD700",
-        tipColor: "#FFD700",
-        glow: 18,
-        draw: drawLightsaber
-      },
-      {
-        name: "lightsaber-red",
-        bladeColor: "#FF4444",
-        tipColor: "#FF4444",
-        glow: 12,
-        draw: drawLightsaber
-      },
-      {
-        name: "lightsaber-blue",
-        bladeColor: "#0000ff",
-        tipColor: "#0000ff",
-        glow: 12,
-        draw: drawLightsaber
+    function randomColor() {
+      return "#" + Math.floor(Math.random() * 16777215).toString(16).padStart(6, "0");
+    }
+
+    function randomBladeStyleAndColors() {
+      const styles = ["solid", "rainbow", "striped", "custom"];
+      const style = styles[Math.floor(Math.random() * styles.length)];
+      let colors;
+      if (style === "solid") {
+        colors = [randomColor()];
+      } else if (style === "striped") {
+        colors = [randomColor(), randomColor(), randomColor()];
+      } else if (style === "rainbow") {
+        colors = ["#FF0000", "#FF7F00", "#FFFF00", "#00FF00", "#0000FF", "#4B0082", "#9400D3"];
+      } else {
+        // Custom: random number of colors
+        const num = Math.floor(Math.random() * 4) + 2;
+        colors = Array.from({length: num}, randomColor);
       }
-    ];
-
-    function drawLightsaber(ctx, blade) {
-      ctx.save();
-      ctx.shadowColor = blade.bladeColor;
-      ctx.shadowBlur = blade.glow;
-      ctx.lineWidth = 4;
-      ctx.strokeStyle = blade.bladeColor;
-      ctx.beginPath();
-      ctx.moveTo(-15, 7);
-      ctx.lineTo(-15, 13);
-      ctx.lineTo(blade.length, 13);
-      ctx.lineTo(blade.length, 7);
-      ctx.closePath();
-      ctx.stroke();
-      ctx.restore();
-      ctx.fillStyle = blade.hiltColor;
-      ctx.fillRect(-15, 7, 15, 6);
-      ctx.fillStyle = blade.bladeColor;
-      ctx.fillRect(0, 5, blade.length - 15, 10);
-      ctx.beginPath();
-      ctx.moveTo(blade.length - 15, 5);
-      ctx.lineTo(blade.length, 10);
-      ctx.lineTo(blade.length - 15, 15);
-      ctx.closePath();
-      ctx.fillStyle = blade.tipColor;
-      ctx.fill();
+      return { style, colors };
     }
 
-    function randomBladeType() {
-      return bladeTypes[Math.floor(Math.random() * bladeTypes.length)];
-    }
-
-    // Game logic variables
-    let blades, dots, tripleTimer, tripleDelay, sparks, timerFrames, gameEnded, keys, globalKillMap, totalSaberDeaths, playerName, playerColor;
+    let blades, dots, tripleTimer, tripleDelay, sparks, timerFrames, gameEnded, keys, globalKillMap, totalSaberDeaths, playerName, playerColors, playerBladeStyle;
     let bladeIdCounter = 0;
 
-    function makeBlade(x, y, vx, vy, spinSpeed, length, bladeType, isPlayer = false, aiType = "random") {
+    // Blade model
+    function makeBlade(x, y, vx, vy, spinSpeed, length, isPlayer = false, aiType = "random", style = "solid", colors = ["#39FF14"]) {
       bladeIdCounter += 1;
       return {
         x, y, vx, vy,
@@ -212,15 +216,12 @@
         spinSpeed,
         length,
         height: 20,
-        bladeColor: isPlayer ? playerColor : bladeType.bladeColor,
-        tipColor: isPlayer ? playerColor : bladeType.tipColor,
         hiltColor: "#333",
         isPlayer,
         kills: [],
         health: 100,
         maxHealth: 100,
-        type: bladeType,
-        glow: isPlayer ? 22 : bladeType.glow,
+        glow: isPlayer ? 22 : 18,
         id: bladeIdCounter,
         lastAttacker: null,
         lastDeathCount: 0,
@@ -228,7 +229,9 @@
         aiRetargetTimer: 0,
         aiType: aiType,
         beingChased: false,
-        name: isPlayer ? playerName : undefined
+        name: isPlayer ? playerName : undefined,
+        style,
+        colors,
       };
     }
 
@@ -245,6 +248,7 @@
         let dist = Math.random() * 60 + spread + Math.random() * 100;
         let cx = canvas.width / 2 + Math.cos(angle) * dist + Math.random() * 70 - 35;
         let cy = canvas.height / 2 + Math.sin(angle) * dist + Math.random() * 70 - 35;
+        let { style, colors } = randomBladeStyleAndColors();
         arr.push(makeBlade(
           cx,
           cy,
@@ -252,18 +256,39 @@
           Math.random() * 4 - 2,
           Math.random() * 0.1 + 0.05,
           Math.floor(Math.random() * 60) + 50,
-          randomBladeType(),
           false,
-          types[i]
+          types[i],
+          style,
+          colors
         ));
       }
       return arr;
     }
 
+    function getPlayerBladeColorsAndStyle() {
+      const style = bladeStyleSelect.value;
+      let colors;
+      if (style === "solid") {
+        colors = [playerColorInput.value];
+      } else if (style === "striped") {
+        colors = ["#FF0000", "#FFFFFF", "#0000FF"];
+      } else if (style === "rainbow") {
+        colors = ["#FF0000", "#FF7F00", "#FFFF00", "#00FF00", "#0000FF", "#4B0082", "#9400D3"];
+      } else {
+        // custom
+        colors = Array.from(multiColorGroup.querySelectorAll('.customColorInput')).map(i => i.value);
+        if (colors.length < 2) colors = [playerColorInput.value, "#FFFFFF"];
+      }
+      return { style, colors };
+    }
+
     function initGameVars() {
       bladeIdCounter = 0;
+      const { style, colors } = getPlayerBladeColorsAndStyle();
+      playerBladeStyle = style;
+      playerColors = colors;
       blades = [
-        makeBlade(canvas.width / 2, canvas.height / 2, 0, 0, 0.08, 70, bladeTypes[0], true, "player")
+        makeBlade(canvas.width / 2, canvas.height / 2, 0, 0, 0.08, 70, true, "player", style, colors)
       ].concat(spawnBlades(10, Math.min(canvas.width, canvas.height) / 3));
       dots = [{
         x: Math.random() * (canvas.width - 30) + 15,
@@ -289,7 +314,6 @@
     }
     startBtn.onclick = () => {
       playerName = playerNameInput.value.trim() || "Player";
-      playerColor = playerColorInput.value;
       showGameButtons(false, false);
       leaderboardDiv.style.display = "none";
       deathCountDiv.style.display = "";
@@ -306,13 +330,69 @@
       animate();
     };
 
+    function drawLightsaber(ctx, blade) {
+      ctx.save();
+      ctx.shadowColor = blade.colors[0];
+      ctx.shadowBlur = blade.glow || 18;
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = blade.colors[0];
+      ctx.beginPath();
+      ctx.moveTo(-15, 7);
+      ctx.lineTo(-15, 13);
+      ctx.lineTo(blade.length, 13);
+      ctx.lineTo(blade.length, 7);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.restore();
+
+      // Draw hilt
+      ctx.fillStyle = blade.hiltColor;
+      ctx.fillRect(-15, 7, 15, 6);
+
+      // Draw blade body according to style
+      ctx.save();
+      ctx.translate(0, 7);
+      ctx.beginPath();
+      ctx.rect(0, -2, blade.length - 15, 8);
+      ctx.closePath();
+      if (blade.style === "solid") {
+        ctx.fillStyle = blade.colors[0];
+        ctx.fill();
+      } else if (blade.style === "rainbow") {
+        let grad = ctx.createLinearGradient(0, 0, blade.length - 15, 0);
+        let stops = blade.colors.length;
+        blade.colors.forEach((color, i) => {
+          grad.addColorStop(i / (stops - 1), color);
+        });
+        ctx.fillStyle = grad;
+        ctx.fill();
+      } else if (blade.style === "striped" || blade.style === "custom") {
+        let stripeWidth = (blade.length - 15) / blade.colors.length;
+        for (let i = 0; i < blade.colors.length; i++) {
+          ctx.fillStyle = blade.colors[i];
+          ctx.fillRect(i * stripeWidth, -2, stripeWidth, 8);
+        }
+      }
+      ctx.restore();
+
+      // Draw tip
+      ctx.save();
+      ctx.translate(blade.length - 15, 11);
+      ctx.beginPath();
+      ctx.arc(0, 0, 5, 0, Math.PI * 2);
+      ctx.closePath();
+      ctx.fillStyle = blade.colors[blade.colors.length-1];
+      ctx.fill();
+      ctx.restore();
+    }
+
     function drawKills(ctx, blade) {
       ctx.save();
       ctx.font = "bold 18px monospace";
       ctx.textAlign = "center";
       ctx.textBaseline = "bottom";
       ctx.translate(0, -28);
-      ctx.fillStyle = blade.bladeColor;
+      ctx.fillStyle = blade.colors[0];
       ctx.strokeStyle = "#000";
       ctx.lineWidth = 2;
       if (blade.isPlayer && blade.name) {
@@ -490,7 +570,7 @@
       if (!blade) return "Unknown";
       if (blade.isPlayer && blade.name) return blade.name;
       if (blade.isPlayer) return "Player";
-      return blade.type.name + "#" + blade.id;
+      return "Blade#" + blade.id;
     }
 
     // --------- AI Logic for blades ---------
@@ -702,7 +782,7 @@
             else blades[j].lastAttacker = blades[i];
 
             // Sparks
-            if (blades[i].bladeColor && blades[j].bladeColor) {
+            if (blades[i].colors[0] && blades[j].colors[0]) {
               let sx = (blades[i].x + blades[j].x) / 2;
               let sy = (blades[i].y + blades[j].y) / 2;
               for (let s = 0; s < 8; s++) {
@@ -712,7 +792,7 @@
                   x: sx, y: sy,
                   dx: Math.cos(theta) * len,
                   dy: Math.sin(theta) * len,
-                  color: blendColors(blades[i].bladeColor, blades[j].bladeColor),
+                  color: blendColors(blades[i].colors[0], blades[j].colors[0]),
                   life: 16, maxLife: 16
                 });
               }
@@ -738,7 +818,7 @@
         ctx.save();
         ctx.translate(blade.x, blade.y);
         ctx.rotate(blade.angle);
-        blade.type.draw(ctx, blade);
+        drawLightsaber(ctx, blade);
         drawHealthBar(ctx, blade);
         drawKills(ctx, blade);
         ctx.restore();
