@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Spinning Blade Game</title>
+  <title>Spinning Lightsaber Death Game</title>
   <style>
     body { margin: 0; background: #222; overflow: hidden; }
     canvas { display: block; background: #222; }
@@ -74,195 +74,71 @@
     resizeCanvas();
 
     // Timer variables
-    let timerFrames = 60 * 60; // 60 seconds * 60fps
+    let timerFrames = 60 * 60;
     let gameEnded = false;
 
-    // Blade types with proper tips
+    // Blade types
     const bladeTypes = [
       {
         name: "lightsaber-green",
         bladeColor: "#39FF14",
         tipColor: "#39FF14",
         glow: 18,
-        draw: function(ctx, blade) {
-          ctx.save();
-          ctx.shadowColor = blade.bladeColor;
-          ctx.shadowBlur = blade.glow;
-          ctx.lineWidth = 4;
-          ctx.strokeStyle = blade.bladeColor;
-          ctx.beginPath();
-          ctx.moveTo(-15, 7);
-          ctx.lineTo(-15, 13);
-          ctx.lineTo(blade.length, 13);
-          ctx.lineTo(blade.length, 7);
-          ctx.closePath();
-          ctx.stroke();
-          ctx.restore();
-          ctx.fillStyle = blade.hiltColor;
-          ctx.fillRect(-15, 7, 15, 6);
-          ctx.fillStyle = blade.bladeColor;
-          ctx.fillRect(0, 5, blade.length - 15, 10);
-          ctx.beginPath();
-          ctx.moveTo(blade.length - 15, 5);
-          ctx.lineTo(blade.length, 10);
-          ctx.lineTo(blade.length - 15, 15);
-          ctx.closePath();
-          ctx.fillStyle = blade.tipColor;
-          ctx.fill();
-        }
+        draw: drawLightsaber
       },
       {
         name: "lightsaber-yellow",
         bladeColor: "#FFD700",
         tipColor: "#FFD700",
         glow: 18,
-        draw: function(ctx, blade) {
-          ctx.save();
-          ctx.shadowColor = blade.bladeColor;
-          ctx.shadowBlur = blade.glow;
-          ctx.lineWidth = 4;
-          ctx.strokeStyle = blade.bladeColor;
-          ctx.beginPath();
-          ctx.moveTo(-15, 7);
-          ctx.lineTo(-15, 13);
-          ctx.lineTo(blade.length, 13);
-          ctx.lineTo(blade.length, 7);
-          ctx.closePath();
-          ctx.stroke();
-          ctx.restore();
-          ctx.fillStyle = blade.hiltColor;
-          ctx.fillRect(-15, 7, 15, 6);
-          ctx.fillStyle = blade.bladeColor;
-          ctx.fillRect(0, 5, blade.length - 15, 10);
-          ctx.beginPath();
-          ctx.moveTo(blade.length - 15, 5);
-          ctx.lineTo(blade.length, 10);
-          ctx.lineTo(blade.length - 15, 15);
-          ctx.closePath();
-          ctx.fillStyle = blade.tipColor;
-          ctx.fill();
-        }
+        draw: drawLightsaber
       },
       {
         name: "lightsaber-red",
         bladeColor: "#FF4444",
         tipColor: "#FF4444",
         glow: 12,
-        draw: function(ctx, blade) {
-          ctx.save();
-          ctx.shadowColor = blade.bladeColor;
-          ctx.shadowBlur = blade.glow;
-          ctx.lineWidth = 4;
-          ctx.strokeStyle = blade.bladeColor;
-          ctx.beginPath();
-          ctx.moveTo(-15, 7);
-          ctx.lineTo(-15, 13);
-          ctx.lineTo(blade.length, 13);
-          ctx.lineTo(blade.length, 7);
-          ctx.closePath();
-          ctx.stroke();
-          ctx.restore();
-          ctx.fillStyle = blade.hiltColor;
-          ctx.fillRect(-15, 7, 15, 6);
-          ctx.fillStyle = blade.bladeColor;
-          ctx.fillRect(0, 5, blade.length - 15, 10);
-          ctx.beginPath();
-          ctx.moveTo(blade.length - 15, 5);
-          ctx.lineTo(blade.length, 10);
-          ctx.lineTo(blade.length - 15, 15);
-          ctx.closePath();
-          ctx.fillStyle = blade.tipColor;
-          ctx.fill();
-        }
-      },
-      {
-        name: "sword",
-        bladeColor: "#bbb",
-        tipColor: "#e0e0e0",
-        glow: 7,
-        draw: function(ctx, blade) {
-          ctx.save();
-          ctx.shadowColor = blade.bladeColor;
-          ctx.shadowBlur = blade.glow;
-          ctx.lineWidth = 2;
-          ctx.strokeStyle = blade.bladeColor;
-          ctx.beginPath();
-          ctx.moveTo(-15, 7);
-          ctx.lineTo(-15, 13);
-          ctx.lineTo(blade.length, 13);
-          ctx.lineTo(blade.length, 7);
-          ctx.closePath();
-          ctx.stroke();
-          ctx.restore();
-          ctx.fillStyle = blade.hiltColor;
-          ctx.fillRect(-15, 7, 15, 6);
-          ctx.fillStyle = blade.bladeColor;
-          ctx.fillRect(0, 5, blade.length - 15, 10);
-          ctx.beginPath();
-          ctx.moveTo(blade.length - 15, 5);
-          ctx.lineTo(blade.length, 10);
-          ctx.lineTo(blade.length - 15, 15);
-          ctx.closePath();
-          ctx.fillStyle = blade.tipColor;
-          ctx.fill();
-        }
-      },
-      {
-        name: "pencil",
-        bladeColor: "#FFD700",
-        tipColor: "#e38d5c",
-        glow: 10,
-        draw: function(ctx, blade) {
-          ctx.save();
-          ctx.shadowColor = blade.bladeColor;
-          ctx.shadowBlur = blade.glow;
-          ctx.lineWidth = 2;
-          ctx.strokeStyle = blade.bladeColor;
-          ctx.beginPath();
-          ctx.moveTo(-15, 7);
-          ctx.lineTo(-15, 13);
-          ctx.lineTo(blade.length, 13);
-          ctx.lineTo(blade.length, 7);
-          ctx.closePath();
-          ctx.stroke();
-          ctx.restore();
-          ctx.fillStyle = blade.hiltColor;
-          ctx.fillRect(-15, 7, 15, 6);
-          ctx.fillStyle = blade.bladeColor;
-          ctx.fillRect(0, 5, blade.length - 15, 10);
-          // Wood tip
-          ctx.beginPath();
-          ctx.moveTo(blade.length - 15, 5);
-          ctx.lineTo(blade.length, 10);
-          ctx.lineTo(blade.length - 15, 15);
-          ctx.closePath();
-          ctx.fillStyle = blade.tipColor;
-          ctx.fill();
-          // Graphite tip
-          ctx.beginPath();
-          ctx.moveTo(blade.length, 10);
-          ctx.lineTo(blade.length - 12, 10);
-          ctx.lineTo(blade.length - 15, 13);
-          ctx.closePath();
-          ctx.fillStyle = "#111";
-          ctx.fill();
-        }
+        draw: drawLightsaber
       }
     ];
+
+    function drawLightsaber(ctx, blade) {
+      ctx.save();
+      ctx.shadowColor = blade.bladeColor;
+      ctx.shadowBlur = blade.glow;
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = blade.bladeColor;
+      ctx.beginPath();
+      ctx.moveTo(-15, 7);
+      ctx.lineTo(-15, 13);
+      ctx.lineTo(blade.length, 13);
+      ctx.lineTo(blade.length, 7);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.restore();
+      ctx.fillStyle = blade.hiltColor;
+      ctx.fillRect(-15, 7, 15, 6);
+      ctx.fillStyle = blade.bladeColor;
+      ctx.fillRect(0, 5, blade.length - 15, 10);
+      ctx.beginPath();
+      ctx.moveTo(blade.length - 15, 5);
+      ctx.lineTo(blade.length, 10);
+      ctx.lineTo(blade.length - 15, 15);
+      ctx.closePath();
+      ctx.fillStyle = blade.tipColor;
+      ctx.fill();
+    }
 
     function randomBladeType() {
       return bladeTypes[Math.floor(Math.random() * bladeTypes.length)];
     }
 
-    function makeBlade(x, y, vx, vy, spinSpeed, length, bladeType, isPlayer=false) {
+    function makeBlade(x, y, vx, vy, spinSpeed, length, bladeType, isPlayer = false) {
       return {
-        x,
-        y,
-        vx,
-        vy,
+        x, y, vx, vy,
         angle: 0,
         spinSpeed,
-        length: length,
+        length,
         height: 20,
         bladeColor: bladeType.bladeColor,
         tipColor: bladeType.tipColor,
@@ -274,17 +150,17 @@
         type: bladeType,
         glow: isPlayer ? 18 : bladeType.glow,
         id: Math.random().toString(36).substr(2, 6),
-        lastAttacker: null // track who touched this blade last
+        lastAttacker: null,
+        lastDeathCount: 0
       };
     }
 
-    // Always start with player and one enemy blade!
     let blades = [
       makeBlade(canvas.width / 2, canvas.height / 2, 0, 0, 0.08, 70, bladeTypes[0], true),
-      makeBlade(Math.random()*canvas.width, Math.random()*canvas.height,
-        Math.random()*4-2, Math.random()*4-2,
-        Math.random()*0.1+0.05,
-        Math.floor(Math.random()*60)+50,
+      makeBlade(Math.random() * canvas.width, Math.random() * canvas.height,
+        Math.random() * 4 - 2, Math.random() * 4 - 2,
+        Math.random() * 0.1 + 0.05,
+        Math.floor(Math.random() * 60) + 50,
         randomBladeType())
     ];
 
@@ -299,7 +175,6 @@
     window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
     window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
 
-    // Tripling logic for blades
     let tripleTimer = blades.length * 2 * 60;
     let tripleDelay = tripleTimer;
 
@@ -307,40 +182,32 @@
     let totalKills = 0;
 
     // For leaderboard
-    let globalKillMap = {}; // bladeId -> kills
+    let globalKillMap = {};
 
     function drawKills(ctx, blade) {
       ctx.save();
       ctx.font = "bold 20px monospace";
       ctx.textAlign = "center";
       ctx.textBaseline = "bottom";
-      if (blade.isPlayer) {
-        ctx.fillStyle = "#FFD700";
-        ctx.strokeStyle = "#000";
-        ctx.lineWidth = 2;
-      } else {
-        ctx.fillStyle = blade.bladeColor;
-        ctx.strokeStyle = "#000";
-        ctx.lineWidth = 2;
-      }
+      ctx.fillStyle = blade.bladeColor;
+      ctx.strokeStyle = "#000";
+      ctx.lineWidth = 2;
       ctx.translate(0, -28);
       ctx.strokeText(blade.kills, 0, 0);
       ctx.fillText(blade.kills, 0, 0);
       ctx.restore();
-    }
-
-    function drawDeathCount(ctx, blade) {
-      if (blade.lastAttacker && blade.lastAttacker.killsDisplay) {
+      // Draw death count above killer's head if just killed
+      if (blade.lastDeathCount > 0) {
         ctx.save();
         ctx.font = "bold 18px monospace";
         ctx.textAlign = "center";
-        ctx.textBaseline = "top";
-        ctx.translate(0, 35);
-        ctx.strokeStyle = "#111";
-        ctx.lineWidth = 2;
+        ctx.textBaseline = "bottom";
+        ctx.translate(0, -55);
         ctx.fillStyle = "#FFD700";
-        ctx.strokeText(`Killed by: ${blade.lastAttacker.killsDisplay}`, 0, 0);
-        ctx.fillText(`Killed by: ${blade.lastAttacker.killsDisplay}`, 0, 0);
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 2;
+        ctx.strokeText("Death: +" + blade.lastDeathCount, 0, 0);
+        ctx.fillText("Death: +" + blade.lastDeathCount, 0, 0);
         ctx.restore();
       }
     }
@@ -350,13 +217,13 @@
       ctx.translate(0, -10);
       const barWidth = 60, barHeight = 8;
       ctx.fillStyle = "#222";
-      ctx.fillRect(-barWidth/2, 0, barWidth, barHeight);
+      ctx.fillRect(-barWidth / 2, 0, barWidth, barHeight);
       let healthRatio = Math.max(0, blade.health) / blade.maxHealth;
       ctx.fillStyle = healthRatio > 0.5 ? "#39FF14"
         : healthRatio > 0.25 ? "#FFD700" : "#FF4444";
-      ctx.fillRect(-barWidth/2, 0, barWidth * healthRatio, barHeight);
+      ctx.fillRect(-barWidth / 2, 0, barWidth * healthRatio, barHeight);
       ctx.strokeStyle = "#fff";
-      ctx.strokeRect(-barWidth/2, 0, barWidth, barHeight);
+      ctx.strokeRect(-barWidth / 2, 0, barWidth, barHeight);
       ctx.restore();
     }
 
@@ -377,6 +244,7 @@
         spark.life--;
       });
     }
+
     function drawDot(ctx, dot) {
       ctx.beginPath();
       ctx.arc(dot.x, dot.y, dot.radius, 0, Math.PI * 2);
@@ -384,12 +252,13 @@
       ctx.fill();
       ctx.closePath();
     }
+
     function checkDotBladeCollision(blade, dot) {
       const bladePoly = [
-        {x: -15, y: 7},
-        {x: -15, y: 13},
-        {x: blade.length, y: 13},
-        {x: blade.length, y: 7}
+        { x: -15, y: 7 },
+        { x: -15, y: 13 },
+        { x: blade.length, y: 13 },
+        { x: blade.length, y: 7 }
       ];
       const cos = Math.cos(blade.angle);
       const sin = Math.sin(blade.angle);
@@ -411,10 +280,10 @@
       if (pointInPoly(dot.x, dot.y, worldPoly)) return true;
       for (let i = 0; i < worldPoly.length; i++) {
         const a = worldPoly[i];
-        const b = worldPoly[(i+1)%worldPoly.length];
+        const b = worldPoly[(i + 1) % worldPoly.length];
         const dx = b.x - a.x;
         const dy = b.y - a.y;
-        const l2 = dx*dx + dy*dy;
+        const l2 = dx * dx + dy * dy;
         let t = ((dot.x - a.x) * dx + (dot.y - a.y) * dy) / l2;
         t = Math.max(0, Math.min(1, t));
         const closestX = a.x + t * dx;
@@ -424,17 +293,19 @@
       }
       return false;
     }
+
     function checkBladeBladeCollision(b1, b2) {
       const r1 = getBladePolyWorld(b1);
       const r2 = getBladePolyWorld(b2);
       return polysIntersect(r1, r2);
     }
+
     function getBladePolyWorld(blade) {
       const bladePoly = [
-        {x: -15, y: 7},
-        {x: -15, y: 13},
-        {x: blade.length, y: 13},
-        {x: blade.length, y: 7}
+        { x: -15, y: 7 },
+        { x: -15, y: 13 },
+        { x: blade.length, y: 13 },
+        { x: blade.length, y: 7 }
       ];
       const cos = Math.cos(blade.angle);
       const sin = Math.sin(blade.angle);
@@ -443,14 +314,15 @@
         y: blade.y + pt.x * sin + pt.y * cos
       }));
     }
+
     function polysIntersect(polyA, polyB) {
       function getAxes(poly) {
         const axes = [];
         for (let i = 0; i < poly.length; i++) {
           const p1 = poly[i];
           const p2 = poly[(i + 1) % poly.length];
-          const edge = {x: p2.x - p1.x, y: p2.y - p1.y};
-          axes.push({x: -edge.y, y: edge.x});
+          const edge = { x: p2.x - p1.x, y: p2.y - p1.y };
+          axes.push({ x: -edge.y, y: edge.x });
         }
         return axes;
       }
@@ -461,7 +333,7 @@
           if (val < min) min = val;
           if (val > max) max = val;
         }
-        return {min, max};
+        return { min, max };
       }
       const axesA = getAxes(polyA);
       const axesB = getAxes(polyB);
@@ -472,31 +344,34 @@
       }
       return true;
     }
+
     function respawnDot(dotObj) {
       dotObj.x = Math.random() * (canvas.width - 30) + 15;
       dotObj.y = Math.random() * (canvas.height - 30) + 15;
     }
+
     function blendColors(c1, c2) {
       function hexToRgb(hex) {
-        hex = hex.replace("#","");
+        hex = hex.replace("#", "");
         return [
-          parseInt(hex.substring(0,2),16),
-          parseInt(hex.substring(2,4),16),
-          parseInt(hex.substring(4,6),16)
+          parseInt(hex.substring(0, 2), 16),
+          parseInt(hex.substring(2, 4), 16),
+          parseInt(hex.substring(4, 6), 16)
         ];
       }
-      function rgbToHex(r,g,b) {
-        return "#" + [r,g,b].map(x => x.toString(16).padStart(2,"0")).join("");
+      function rgbToHex(r, g, b) {
+        return "#" + [r, g, b].map(x => x.toString(16).padStart(2, "0")).join("");
       }
       let rgb1 = hexToRgb(c1), rgb2 = hexToRgb(c2);
       return rgbToHex(
-        Math.floor((rgb1[0]+rgb2[0])/2),
-        Math.floor((rgb1[1]+rgb2[1])/2),
-        Math.floor((rgb1[2]+rgb2[2])/2)
+        Math.floor((rgb1[0] + rgb2[0]) / 2),
+        Math.floor((rgb1[1] + rgb2[1]) / 2),
+        Math.floor((rgb1[2] + rgb2[2]) / 2)
       );
     }
-    // Helper to display name/kills for leaderboard
+
     function getBladeDisplay(blade) {
+      if (!blade) return "Unknown";
       if (blade.isPlayer) return "Player";
       return blade.type.name + "#" + blade.id;
     }
@@ -522,7 +397,7 @@
       }
       if (gameEnded) return;
 
-      // Tripling ALL blades as a group, interval = blades.length * 2 sec
+      // Tripling ALL blades
       if (--tripleTimer <= 0) {
         if (blades.length < 243) {
           let newBlades = [];
@@ -533,11 +408,11 @@
               const angle = Math.random() * Math.PI * 2;
               const speed = Math.random() * 3 + 2;
               newBlades.push(makeBlade(
-                b.x + Math.random()*30-15,
-                b.y + Math.random()*30-15,
-                Math.cos(angle)*speed,
-                Math.sin(angle)*speed,
-                Math.random()*0.15+0.05,
+                b.x + Math.random() * 30 - 15,
+                b.y + Math.random() * 30 - 15,
+                Math.cos(angle) * speed,
+                Math.sin(angle) * speed,
+                Math.random() * 0.15 + 0.05,
                 len,
                 bladeType
               ));
@@ -545,7 +420,7 @@
           });
           blades = blades.concat(newBlades);
         }
-        tripleDelay = blades.length * 2 * 60; // blades × 2 sec × 60fps
+        tripleDelay = blades.length * 2 * 60;
         tripleTimer = tripleDelay;
       }
 
@@ -555,10 +430,10 @@
       if (keys['s']) playerBlade.y += 5;
       if (keys['a']) playerBlade.x -= 5;
       if (keys['d']) playerBlade.x += 5;
-      if (keys['ArrowUp']) playerBlade.y -= 5;
-      if (keys['ArrowDown']) playerBlade.y += 5;
-      if (keys['ArrowLeft']) playerBlade.x -= 5;
-      if (keys['ArrowRight']) playerBlade.x += 5;
+      if (keys['arrowup']) playerBlade.y -= 5;
+      if (keys['arrowdown']) playerBlade.y += 5;
+      if (keys['arrowleft']) playerBlade.x -= 5;
+      if (keys['arrowright']) playerBlade.x += 5;
 
       playerBlade.x = Math.max(0, Math.min(canvas.width, playerBlade.x));
       playerBlade.y = Math.max(0, Math.min(canvas.height, playerBlade.y));
@@ -580,7 +455,7 @@
       dots.forEach((dotObj, dotIdx) => {
         blades.forEach((blade, bladeIdx) => {
           if (checkDotBladeCollision(blade, dotObj)) {
-            dotKills.push({dotIdx, bladeIdx});
+            dotKills.push({ dotIdx, bladeIdx });
           }
         });
       });
@@ -593,7 +468,6 @@
           bladesKilled[kill.dotIdx] = true;
           blade.health = Math.min(blade.maxHealth, blade.health + 20);
           blade.length = Math.min(120, blade.length + 10);
-          // Update leaderboard kills
           globalKillMap[blade.id] = (globalKillMap[blade.id] || 0) + 1;
         });
         let killedDotIndices = Object.keys(bladesKilled).map(Number);
@@ -628,11 +502,14 @@
             blades[j].health = Math.max(0, blades[j].health - 2);
             blades[i].length = Math.max(30, blades[i].length - 5);
             blades[j].length = Math.max(30, blades[j].length - 5);
-            // Track who hit who last
+
+            // Track last attacker
             if (blades[i].health <= 0) blades[i].lastAttacker = blades[j];
             else blades[i].lastAttacker = blades[j];
             if (blades[j].health <= 0) blades[j].lastAttacker = blades[i];
             else blades[j].lastAttacker = blades[i];
+
+            // Sparks
             if (blades[i].bladeColor && blades[j].bladeColor) {
               let sx = (blades[i].x + blades[j].x) / 2;
               let sy = (blades[i].y + blades[j].y) / 2;
@@ -641,8 +518,8 @@
                 let len = Math.random() * 25 + 10;
                 sparks.push({
                   x: sx, y: sy,
-                  dx: Math.cos(theta)*len,
-                  dy: Math.sin(theta)*len,
+                  dx: Math.cos(theta) * len,
+                  dy: Math.sin(theta) * len,
                   color: blendColors(blades[i].bladeColor, blades[j].bladeColor),
                   life: 16, maxLife: 16
                 });
@@ -652,18 +529,18 @@
         }
       }
 
-      // Remove blades with zero health
+      // Remove dead blades and update killer's death count
       let bladesToRemove = blades.filter(blade => blade.health <= 0);
-      blades = blades.filter(blade => blade.health > 0);
-
-      // For each dead blade, if it was killed by someone, increment lastAttacker's kills
       bladesToRemove.forEach(deadBlade => {
-        if (deadBlade.lastAttacker && deadBlade.lastAttacker.id !== deadBlade.id) {
+        if (deadBlade.lastAttacker && deadBlade.lastAttacker !== deadBlade) {
           deadBlade.lastAttacker.kills += 1;
           globalKillMap[deadBlade.lastAttacker.id] = (globalKillMap[deadBlade.lastAttacker.id] || 0) + 1;
-          deadBlade.lastAttacker.killsDisplay = getBladeDisplay(deadBlade.lastAttacker);
+          // Show the death count over killer's head for a few frames
+          deadBlade.lastAttacker.lastDeathCount = 1;
+          setTimeout(() => { deadBlade.lastAttacker.lastDeathCount = 0; }, 1000);
         }
       });
+      blades = blades.filter(blade => blade.health > 0);
 
       // Draw blades
       blades.forEach(blade => {
@@ -673,7 +550,6 @@
         blade.type.draw(ctx, blade);
         drawHealthBar(ctx, blade);
         drawKills(ctx, blade);
-        drawDeathCount(ctx, blade); // show who killed it last
         ctx.restore();
       });
 
@@ -686,7 +562,6 @@
     }
 
     function showLeaderboard() {
-      // Collect all blades that ever existed for leaderboard
       let bladeKillArr = [];
       for (let id in globalKillMap) {
         bladeKillArr.push({
@@ -694,29 +569,27 @@
           kills: globalKillMap[id]
         });
       }
-      // Add alive blades
       blades.forEach(blade => {
         bladeKillArr.push({
           id: blade.id,
           kills: blade.kills
         });
       });
-      // Remove duplicates & keep max
       let dedupKillMap = {};
       bladeKillArr.forEach(b => {
         dedupKillMap[b.id] = Math.max(dedupKillMap[b.id] || 0, b.kills);
       });
       let sortedBlades = Object.entries(dedupKillMap).map(([id, kills]) => {
         let blade = blades.find(b => b.id === id);
-        let display = blade ? getBladeDisplay(blade) : (id === blades[0].id ? "Player" : ("Blade#" + id));
-        return {display, kills};
-      }).sort((a,b) => b.kills - a.kills);
+        let display = blade ? getBladeDisplay(blade) : ("Blade#" + id);
+        return { display, kills };
+      }).sort((a, b) => b.kills - a.kills);
 
       leaderboardDiv.innerHTML =
         `<h2>Top 3 Kills</h2>
-         <ol>${sortedBlades.slice(0,3).map(b =>
+         <ol>${sortedBlades.slice(0, 3).map(b =>
           `<li>${b.display}: ${b.kills} kills</li>`
-         ).join('')}
+        ).join('')}
          </ol>`;
       leaderboardDiv.style.display = "block";
     }
