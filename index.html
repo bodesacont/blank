@@ -22,17 +22,50 @@
     }
     #deathCount { top: 16px; }
     #timerDisplay { top: 54px; }
+    #leaderboard {
+      position: absolute;
+      left: 50%;
+      top: 110px;
+      transform: translateX(-50%);
+      background: #222c;
+      color: #fff;
+      font-family: monospace;
+      font-size: 26px;
+      border-radius: 16px;
+      padding: 18px 36px;
+      z-index: 10;
+      box-shadow: 0 4px 16px #0008;
+      display: none;
+      text-align: center;
+    }
+    #leaderboard h2 {
+      margin: 0 0 14px 0;
+      font-size: 32px;
+      color: #FFD700;
+      text-shadow: 0 2px 8px #000c;
+    }
+    #leaderboard ol {
+      margin: 0;
+      padding: 0 0 0 32px;
+      text-align: left;
+    }
+    #leaderboard li {
+      margin-bottom: 7px;
+      font-size: 24px;
+    }
   </style>
 </head>
 <body>
   <div id="deathCount">Total Kills: 0</div>
   <div id="timerDisplay">Time Left: 01:00</div>
+  <div id="leaderboard"></div>
   <canvas id="dvdCanvas"></canvas>
   <script>
     const canvas = document.getElementById('dvdCanvas');
     const ctx = canvas.getContext('2d');
     const deathCountDiv = document.getElementById('deathCount');
     const timerDisplay = document.getElementById('timerDisplay');
+    const leaderboardDiv = document.getElementById('leaderboard');
     function resizeCanvas() {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
@@ -46,7 +79,6 @@
 
     // Blade types with proper tips
     const bladeTypes = [
-      // ... (your bladeTypes array unchanged) ...
       {
         name: "lightsaber-green",
         bladeColor: "#39FF14",
@@ -241,7 +273,8 @@
         maxHealth: 100,
         type: bladeType,
         glow: isPlayer ? 18 : bladeType.glow,
-        id: Math.random().toString(36).substr(2, 6)
+        id: Math.random().toString(36).substr(2, 6),
+        lastAttacker: null // track who touched this blade last
       };
     }
 
@@ -273,19 +306,45 @@
     let sparks = [];
     let totalKills = 0;
 
+    // For leaderboard
+    let globalKillMap = {}; // bladeId -> kills
+
     function drawKills(ctx, blade) {
       ctx.save();
       ctx.font = "bold 20px monospace";
       ctx.textAlign = "center";
       ctx.textBaseline = "bottom";
-      ctx.fillStyle = blade.bladeColor;
-      ctx.strokeStyle = "#000";
-      ctx.lineWidth = 2;
+      if (blade.isPlayer) {
+        ctx.fillStyle = "#FFD700";
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 2;
+      } else {
+        ctx.fillStyle = blade.bladeColor;
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 2;
+      }
       ctx.translate(0, -28);
       ctx.strokeText(blade.kills, 0, 0);
       ctx.fillText(blade.kills, 0, 0);
       ctx.restore();
     }
+
+    function drawDeathCount(ctx, blade) {
+      if (blade.lastAttacker && blade.lastAttacker.killsDisplay) {
+        ctx.save();
+        ctx.font = "bold 18px monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        ctx.translate(0, 35);
+        ctx.strokeStyle = "#111";
+        ctx.lineWidth = 2;
+        ctx.fillStyle = "#FFD700";
+        ctx.strokeText(`Killed by: ${blade.lastAttacker.killsDisplay}`, 0, 0);
+        ctx.fillText(`Killed by: ${blade.lastAttacker.killsDisplay}`, 0, 0);
+        ctx.restore();
+      }
+    }
+
     function drawHealthBar(ctx, blade) {
       ctx.save();
       ctx.translate(0, -10);
@@ -300,6 +359,7 @@
       ctx.strokeRect(-barWidth/2, 0, barWidth, barHeight);
       ctx.restore();
     }
+
     function drawSparks(ctx) {
       sparks = sparks.filter(spark => spark.life > 0);
       sparks.forEach(spark => {
@@ -435,6 +495,11 @@
         Math.floor((rgb1[2]+rgb2[2])/2)
       );
     }
+    // Helper to display name/kills for leaderboard
+    function getBladeDisplay(blade) {
+      if (blade.isPlayer) return "Player";
+      return blade.type.name + "#" + blade.id;
+    }
 
     function animate() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -451,6 +516,8 @@
         if (timerFrames <= 0) {
           gameEnded = true;
           timerDisplay.textContent = "Game Over";
+          showLeaderboard();
+          return;
         }
       }
       if (gameEnded) return;
@@ -526,6 +593,8 @@
           bladesKilled[kill.dotIdx] = true;
           blade.health = Math.min(blade.maxHealth, blade.health + 20);
           blade.length = Math.min(120, blade.length + 10);
+          // Update leaderboard kills
+          globalKillMap[blade.id] = (globalKillMap[blade.id] || 0) + 1;
         });
         let killedDotIndices = Object.keys(bladesKilled).map(Number);
         if (dots.length < 27) {
@@ -551,6 +620,7 @@
       }
 
       // Blade vs blade collision & sparks
+      let deadBladeIndices = [];
       for (let i = 0; i < blades.length; ++i) {
         for (let j = i + 1; j < blades.length; ++j) {
           if (checkBladeBladeCollision(blades[i], blades[j])) {
@@ -558,6 +628,11 @@
             blades[j].health = Math.max(0, blades[j].health - 2);
             blades[i].length = Math.max(30, blades[i].length - 5);
             blades[j].length = Math.max(30, blades[j].length - 5);
+            // Track who hit who last
+            if (blades[i].health <= 0) blades[i].lastAttacker = blades[j];
+            else blades[i].lastAttacker = blades[j];
+            if (blades[j].health <= 0) blades[j].lastAttacker = blades[i];
+            else blades[j].lastAttacker = blades[i];
             if (blades[i].bladeColor && blades[j].bladeColor) {
               let sx = (blades[i].x + blades[j].x) / 2;
               let sy = (blades[i].y + blades[j].y) / 2;
@@ -578,8 +653,19 @@
       }
 
       // Remove blades with zero health
+      let bladesToRemove = blades.filter(blade => blade.health <= 0);
       blades = blades.filter(blade => blade.health > 0);
 
+      // For each dead blade, if it was killed by someone, increment lastAttacker's kills
+      bladesToRemove.forEach(deadBlade => {
+        if (deadBlade.lastAttacker && deadBlade.lastAttacker.id !== deadBlade.id) {
+          deadBlade.lastAttacker.kills += 1;
+          globalKillMap[deadBlade.lastAttacker.id] = (globalKillMap[deadBlade.lastAttacker.id] || 0) + 1;
+          deadBlade.lastAttacker.killsDisplay = getBladeDisplay(deadBlade.lastAttacker);
+        }
+      });
+
+      // Draw blades
       blades.forEach(blade => {
         ctx.save();
         ctx.translate(blade.x, blade.y);
@@ -587,6 +673,7 @@
         blade.type.draw(ctx, blade);
         drawHealthBar(ctx, blade);
         drawKills(ctx, blade);
+        drawDeathCount(ctx, blade); // show who killed it last
         ctx.restore();
       });
 
@@ -596,6 +683,42 @@
       deathCountDiv.textContent = "Total Kills: " + totalKills;
 
       requestAnimationFrame(animate);
+    }
+
+    function showLeaderboard() {
+      // Collect all blades that ever existed for leaderboard
+      let bladeKillArr = [];
+      for (let id in globalKillMap) {
+        bladeKillArr.push({
+          id,
+          kills: globalKillMap[id]
+        });
+      }
+      // Add alive blades
+      blades.forEach(blade => {
+        bladeKillArr.push({
+          id: blade.id,
+          kills: blade.kills
+        });
+      });
+      // Remove duplicates & keep max
+      let dedupKillMap = {};
+      bladeKillArr.forEach(b => {
+        dedupKillMap[b.id] = Math.max(dedupKillMap[b.id] || 0, b.kills);
+      });
+      let sortedBlades = Object.entries(dedupKillMap).map(([id, kills]) => {
+        let blade = blades.find(b => b.id === id);
+        let display = blade ? getBladeDisplay(blade) : (id === blades[0].id ? "Player" : ("Blade#" + id));
+        return {display, kills};
+      }).sort((a,b) => b.kills - a.kills);
+
+      leaderboardDiv.innerHTML =
+        `<h2>Top 3 Kills</h2>
+         <ol>${sortedBlades.slice(0,3).map(b =>
+          `<li>${b.display}: ${b.kills} kills</li>`
+         ).join('')}
+         </ol>`;
+      leaderboardDiv.style.display = "block";
     }
 
     animate();
