@@ -194,7 +194,7 @@
     }
 
     // Game logic variables
-    let blades, dots, tripleTimer, tripleDelay, sparks, timerFrames, gameEnded, keys, globalKillMap, totalSaberDeaths, playerName, playerColor;
+    let blades, hearts, tripleTimer, tripleDelay, sparks, timerFrames, gameEnded, keys, globalKillMap, totalSaberDeaths, playerName, playerColor;
     let bladeIdCounter = 0;
 
     function makeBlade(x, y, vx, vy, spinSpeed, length, bladeType, isPlayer = false, aiType = "random") {
@@ -258,11 +258,15 @@
       blades = [
         makeBlade(canvas.width / 2, canvas.height / 2, 0, 0, 0.08, 70, bladeTypes[0], true, "player")
       ].concat(spawnBlades(10, Math.min(canvas.width, canvas.height) / 3));
-      dots = [{
-        x: Math.random() * (canvas.width - 30) + 15,
-        y: Math.random() * (canvas.height - 30) + 15,
-        radius: 10
-      }];
+      // Always spawn 20 hearts
+      hearts = [];
+      for (let i = 0; i < 20; ++i) {
+        hearts.push({
+          x: Math.random() * (canvas.width - 30) + 15,
+          y: Math.random() * (canvas.height - 30) + 15,
+          radius: 12 // slightly larger for visible heart shape, but still "small"
+        });
+      }
       tripleTimer = blades.length * 2 * 60;
       tripleDelay = tripleTimer;
       sparks = [];
@@ -354,109 +358,37 @@
       });
     }
 
-    function drawDot(ctx, dot) {
+    // Draw a small heart shape
+    function drawHeart(ctx, x, y, size) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.scale(size / 24, size / 24);
       ctx.beginPath();
-      ctx.arc(dot.x, dot.y, dot.radius, 0, Math.PI * 2);
-      ctx.fillStyle = "#fff";
-      ctx.fill();
+      ctx.moveTo(12, 21);
+      ctx.bezierCurveTo(2, 13, 2, 6, 12, 6);
+      ctx.bezierCurveTo(22, 6, 22, 13, 12, 21);
       ctx.closePath();
+      ctx.fillStyle = "#FF3A3A";
+      ctx.globalAlpha = 0.87;
+      ctx.fill();
+      ctx.restore();
     }
 
-    function checkDotBladeCollision(blade, dot) {
-      const bladePoly = [
-        { x: -15, y: 7 },
-        { x: -15, y: 13 },
-        { x: blade.length, y: 13 },
-        { x: blade.length, y: 7 }
-      ];
-      const cos = Math.cos(blade.angle);
-      const sin = Math.sin(blade.angle);
-      const worldPoly = bladePoly.map(pt => ({
-        x: blade.x + pt.x * cos - pt.y * sin,
-        y: blade.y + pt.x * sin + pt.y * cos
-      }));
-      function pointInPoly(px, py, poly) {
-        let inside = false;
-        for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-          const xi = poly[i].x, yi = poly[i].y;
-          const xj = poly[j].x, yj = poly[j].y;
-          const intersect = ((yi > py) !== (yj > py)) &&
-            (px < (xj - xi) * (py - yi) / (yj - yi + 0.0001) + xi);
-          if (intersect) inside = !inside;
-        }
-        return inside;
-      }
-      if (pointInPoly(dot.x, dot.y, worldPoly)) return true;
-      for (let i = 0; i < worldPoly.length; i++) {
-        const a = worldPoly[i];
-        const b = worldPoly[(i + 1) % worldPoly.length];
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
-        const l2 = dx * dx + dy * dy;
-        let t = ((dot.x - a.x) * dx + (dot.y - a.y) * dy) / l2;
-        t = Math.max(0, Math.min(1, t));
-        const closestX = a.x + t * dx;
-        const closestY = a.y + t * dy;
-        const dist = Math.hypot(closestX - dot.x, closestY - dot.y);
-        if (dist < dot.radius) return true;
-      }
-      return false;
+    function drawHeartItem(ctx, heart) {
+      drawHeart(ctx, heart.x, heart.y, heart.radius);
     }
 
-    function checkBladeBladeCollision(b1, b2) {
-      const r1 = getBladePolyWorld(b1);
-      const r2 = getBladePolyWorld(b2);
-      return polysIntersect(r1, r2);
+    function checkHeartBladeCollision(blade, heart) {
+      // Use circle collision for simplicity (like original dot)
+      let dx = blade.x - heart.x;
+      let dy = blade.y - heart.y;
+      let dist = Math.hypot(dx, dy);
+      return dist < (heart.radius + 22); // 22 = blade's body approx size
     }
 
-    function getBladePolyWorld(blade) {
-      const bladePoly = [
-        { x: -15, y: 7 },
-        { x: -15, y: 13 },
-        { x: blade.length, y: 13 },
-        { x: blade.length, y: 7 }
-      ];
-      const cos = Math.cos(blade.angle);
-      const sin = Math.sin(blade.angle);
-      return bladePoly.map(pt => ({
-        x: blade.x + pt.x * cos - pt.y * sin,
-        y: blade.y + pt.x * sin + pt.y * cos
-      }));
-    }
-
-    function polysIntersect(polyA, polyB) {
-      function getAxes(poly) {
-        const axes = [];
-        for (let i = 0; i < poly.length; i++) {
-          const p1 = poly[i];
-          const p2 = poly[(i + 1) % poly.length];
-          const edge = { x: p2.x - p1.x, y: p2.y - p1.y };
-          axes.push({ x: -edge.y, y: edge.x });
-        }
-        return axes;
-      }
-      function proj(poly, axis) {
-        let min = Infinity, max = -Infinity;
-        for (const p of poly) {
-          const val = p.x * axis.x + p.y * axis.y;
-          if (val < min) min = val;
-          if (val > max) max = val;
-        }
-        return { min, max };
-      }
-      const axesA = getAxes(polyA);
-      const axesB = getAxes(polyB);
-      for (const axis of axesA.concat(axesB)) {
-        const pA = proj(polyA, axis);
-        const pB = proj(polyB, axis);
-        if (pA.max < pB.min || pB.max < pA.min) return false;
-      }
-      return true;
-    }
-
-    function respawnDot(dotObj) {
-      dotObj.x = Math.random() * (canvas.width - 30) + 15;
-      dotObj.y = Math.random() * (canvas.height - 30) + 15;
+    function respawnHeart(heartObj) {
+      heartObj.x = Math.random() * (canvas.width - 30) + 15;
+      heartObj.y = Math.random() * (canvas.height - 30) + 15;
     }
 
     function blendColors(c1, c2) {
@@ -486,35 +418,27 @@
       return blade.type.name + "#" + blade.id;
     }
 
-    // --------- MODIFIED AI Logic for blades ---------
+    // --------- AI Logic for blades ---------
     function updateBladeAI() {
       blades.forEach(b => b.beingChased = false);
-
-      // For each non-player blade, determine target based on health rules
-      for (let i = 1; i < blades.length; ++i) {
-        let blade = blades[i];
-
-        // Find all other blades with lower or equal health
-        let lowerHealthBlades = blades.filter(b => b !== blade && b.health < blade.health);
-        let equalHealthBlades = blades.filter(b => b !== blade && b.health === blade.health);
-
-        let target = null;
-        if (lowerHealthBlades.length > 0) {
-          // Always chase one of the lower health blades (closest)
-          target = lowerHealthBlades.reduce((closest, b) => {
-            let dist = Math.hypot(b.x - blade.x, b.y - blade.y);
-            let closestDist = closest ? Math.hypot(closest.x - blade.x, closest.y - blade.y) : Infinity;
-            return dist < closestDist ? b : closest;
-          }, null);
-        } else if (equalHealthBlades.length > 0) {
-          // 50% chance to chase one of the equal health blades (random)
-          if (Math.random() < 0.5) {
-            target = equalHealthBlades[Math.floor(Math.random() * equalHealthBlades.length)];
-          }
+      let runners = blades.filter(b => b.aiType === "runner");
+      let chasers = blades.filter(b => b.aiType === "chaser");
+      // Assign targets for chasers/killers
+      chasers.forEach(blade => {
+        // Retarget if needed
+        if (!blade.aiTarget || blade.aiRetargetTimer <= 0 || !runners.find(b => b.id === blade.aiTarget.id)) {
+          let possibleTargets = runners.length ? runners : blades.filter(b => b !== blade);
+          blade.aiTarget = possibleTargets[Math.floor(Math.random() * possibleTargets.length)];
+          blade.aiRetargetTimer = Math.floor(Math.random() * 90) + 45;
         }
-        blade.aiTarget = target;
-
-        // Movement logic (chase target or wander)
+        blade.aiRetargetTimer--;
+        if (blade.aiTarget && blade.aiTarget.id) {
+          let target = blades.find(b => b.id === blade.aiTarget.id);
+          if (target) target.beingChased = true;
+        }
+      });
+      // Assign movement for chasers/killers
+      chasers.forEach(blade => {
         if (blade.aiTarget) {
           let dx = blade.aiTarget.x - blade.x;
           let dy = blade.aiTarget.y - blade.y;
@@ -531,22 +455,19 @@
               blade.vy = (blade.vy / vmag) * speed;
             }
           }
-        } else {
-          // No target, wander randomly
-          if (!blade.aiWanderTimer || blade.aiWanderTimer-- <= 0) {
-            blade.aiWanderTarget = {
-              x: Math.random() * canvas.width,
-              y: Math.random() * canvas.height
-            };
-            blade.aiWanderTimer = Math.floor(Math.random() * 120) + 40;
-          }
-          let dx = blade.aiWanderTarget.x - blade.x;
-          let dy = blade.aiWanderTarget.y - blade.y;
+        }
+      });
+      // Assign targets for runners
+      runners.forEach(blade => {
+        let chaser = chasers.find(c => c.aiTarget && c.aiTarget.id === blade.id);
+        if (chaser) {
+          let dx = blade.x - chaser.x;
+          let dy = blade.y - chaser.y;
           let dist = Math.hypot(dx, dy);
           if (dist > 1) {
-            let speed = Math.min(2.7, Math.max(0.8, dist / 160));
-            blade.vx += (dx / dist) * 0.13;
-            blade.vy += (dy / dist) * 0.13;
+            let speed = Math.min(5.3, Math.max(2.4, dist / 80));
+            blade.vx += (dx / dist) * 0.25;
+            blade.vy += (dy / dist) * 0.25;
             blade.vx *= 0.93;
             blade.vy *= 0.93;
             let vmag = Math.hypot(blade.vx, blade.vy);
@@ -555,10 +476,37 @@
               blade.vy = (blade.vy / vmag) * speed;
             }
           }
+        } else {
+          if (!blade.aiTarget || blade.aiRetargetTimer <= 0 || !blades.find(b => b.id === (blade.aiTarget && blade.aiTarget.id))) {
+            blade.aiTarget = {
+              x: Math.random() * canvas.width,
+              y: Math.random() * canvas.height,
+              id: null
+            };
+            blade.aiRetargetTimer = Math.floor(Math.random() * 120) + 40;
+          }
+          blade.aiRetargetTimer--;
+          if (blade.aiTarget) {
+            let dx = blade.aiTarget.x - blade.x;
+            let dy = blade.aiTarget.y - blade.y;
+            let dist = Math.hypot(dx, dy);
+            if (dist > 1) {
+              let speed = Math.min(2.7, Math.max(0.8, dist / 160));
+              blade.vx += (dx / dist) * 0.13;
+              blade.vy += (dy / dist) * 0.13;
+              blade.vx *= 0.93;
+              blade.vy *= 0.93;
+              let vmag = Math.hypot(blade.vx, blade.vy);
+              if (vmag > speed) {
+                blade.vx = (blade.vx / vmag) * speed;
+                blade.vy = (blade.vy / vmag) * speed;
+              }
+            }
+          }
         }
-      }
+      });
     }
-    // --------- End MODIFIED AI Logic ---------
+    // --------- End AI Logic ---------
 
     function animate() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -629,43 +577,25 @@
       // Spin all blades
       blades.forEach(blade => blade.angle += blade.spinSpeed);
 
-      // --- Dot logic ---
-      let dotKills = [];
-      dots.forEach((dotObj, dotIdx) => {
+      // --- Heart logic ---
+      let heartKills = [];
+      hearts.forEach((heartObj, heartIdx) => {
         blades.forEach((blade, bladeIdx) => {
-          if (checkDotBladeCollision(blade, dotObj)) {
-            dotKills.push({ dotIdx, bladeIdx });
+          if (checkHeartBladeCollision(blade, heartObj)) {
+            heartKills.push({ heartIdx, bladeIdx });
           }
         });
       });
-      if (dotKills.length > 0) {
-        let bladesKilled = {};
-        dotKills.forEach(kill => {
+      if (heartKills.length > 0) {
+        let heartsToRespawn = {};
+        heartKills.forEach(kill => {
           let blade = blades[kill.bladeIdx];
           blade.health = Math.min(blade.maxHealth, blade.health + 20);
           blade.length = Math.min(120, blade.length + 10);
-          bladesKilled[kill.dotIdx] = true;
+          heartsToRespawn[kill.heartIdx] = true;
         });
-        let killedDotIndices = Object.keys(bladesKilled).map(Number);
-        if (dots.length < 27) {
-          let newDots = [];
-          for (const dotIdx of killedDotIndices) {
-            respawnDot(dots[dotIdx]);
-            for (let t = 0; t < 2; t++) {
-              newDots.push({
-                x: Math.random() * (canvas.width - 30) + 15,
-                y: Math.random() * (canvas.height - 30) + 15,
-                radius: 10
-              });
-            }
-          }
-          dots = dots.concat(newDots);
-        } else {
-          dots = [{
-            x: Math.random() * (canvas.width - 30) + 15,
-            y: Math.random() * (canvas.height - 30) + 15,
-            radius: 10
-          }];
+        for (const idx of Object.keys(heartsToRespawn)) {
+          respawnHeart(hearts[idx]);
         }
       }
 
@@ -728,7 +658,7 @@
         ctx.restore();
       });
 
-      dots.forEach(dot => drawDot(ctx, dot));
+      hearts.forEach(heart => drawHeartItem(ctx, heart));
       drawSparks(ctx);
 
       deathCountDiv.textContent = "Total Lightsaber Deaths: " + totalSaberDeaths;
