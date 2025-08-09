@@ -437,6 +437,7 @@
       ctx.restore();
     }
 
+    // --- SPARKS: dissipate in about 20 frames ---
     function drawSparks(ctx, camera) {
       sparks = sparks.filter(spark => spark.life > 0);
       sparks.forEach(spark => {
@@ -453,6 +454,7 @@
         spark.y += spark.dy * 0.25;
         spark.x = (spark.x + WORLD_WIDTH) % WORLD_WIDTH;
         spark.y = (spark.y + WORLD_HEIGHT) % WORLD_HEIGHT;
+        spark.life--; // 20 frames for fast but visible effect
       });
     }
 
@@ -783,7 +785,8 @@
                   dx: Math.cos(theta) * len,
                   dy: Math.sin(theta) * len,
                   color: blendColors(blades[i].colors[0], blades[j].colors[0]),
-                  life: 16, maxLife: 16
+                  life: 20, // Sparks dissipate in about 20 frames!
+                  maxLife: 20
                 });
               }
             }
